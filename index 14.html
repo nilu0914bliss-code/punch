@@ -1,0 +1,3009 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>門店打卡系統</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #eff6ff;
+    --success: #16a34a;
+    --success-light: #f0fdf4;
+    --danger: #dc2626;
+    --danger-light: #fef2f2;
+    --warning: #d97706;
+    --warning-light: #fffbeb;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+    --white: #ffffff;
+    --radius: 12px;
+    --shadow: 0 2px 8px rgba(0,0,0,0.08);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: -apple-system, 'PingFang TC', 'Noto Sans TC', sans-serif;
+    background: var(--gray-100);
+    color: var(--gray-800);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  /* ── Phone Frame ── */
+  .phone-shell {
+    width: 100%;
+    max-width: 430px;
+    min-height: 100vh;
+    background: var(--white);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Pages ── */
+  .page {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 80px;
+  }
+  .page.active { display: flex; }
+
+  /* ── Top Bar ── */
+  .topbar {
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-200);
+    padding: 16px 20px 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .topbar-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--gray-900);
+    flex: 1;
+  }
+  .topbar-sub {
+    font-size: 12px;
+    color: var(--gray-500);
+    margin-top: 2px;
+  }
+  .back-btn {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--gray-100);
+    border-radius: 50%;
+    border: none; cursor: pointer;
+    font-size: 18px;
+    color: var(--gray-700);
+  }
+  .topbar-badge {
+    background: var(--danger);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 99px;
+  }
+
+  /* ── Bottom Nav ── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 430px;
+    background: var(--white);
+    border-top: 1px solid var(--gray-200);
+    display: flex;
+    z-index: 200;
+  }
+  .nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 4px 8px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 10px;
+    color: var(--gray-400);
+    font-weight: 600;
+    gap: 3px;
+    transition: color 0.15s;
+  }
+  .nav-btn.active { color: var(--primary); }
+  .nav-icon { font-size: 22px; }
+
+  /* ── Role Switch Banner ── */
+  .role-banner {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .role-label { color: rgba(255,255,255,0.8); font-size: 12px; }
+  .role-name { color: #fff; font-size: 15px; font-weight: 700; }
+  .role-switch-btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin: 0 16px 12px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+
+  /* ── Section padding ── */
+  .section { padding: 16px 16px 0; }
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+
+  /* ── Big Clock ── */
+  .clock-box {
+    text-align: center;
+    padding: 24px 20px 16px;
+  }
+  .clock-time {
+    font-size: 52px;
+    font-weight: 800;
+    color: var(--gray-900);
+    letter-spacing: -2px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .clock-date {
+    font-size: 15px;
+    color: var(--gray-500);
+    margin-top: 6px;
+  }
+
+  /* ── GPS Status ── */
+  .gps-box {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 0 16px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .gps-icon { font-size: 22px; }
+  .gps-info { flex: 1; }
+  .gps-status { font-size: 14px; font-weight: 700; }
+  .gps-status.ok { color: var(--success); }
+  .gps-status.fail { color: var(--danger); }
+  .gps-detail { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+  .gps-badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .gps-badge.ok { background: var(--success-light); color: var(--success); }
+  .gps-badge.fail { background: var(--danger-light); color: var(--danger); }
+
+  /* ── Punch Buttons ── */
+  .punch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 0 16px 12px;
+  }
+  .punch-btn {
+    border: none;
+    border-radius: var(--radius);
+    padding: 18px 10px;
+    font-size: 17px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .punch-btn:active { transform: scale(0.97); }
+  .punch-btn .punch-label { font-size: 13px; font-weight: 600; }
+  .punch-btn.in { background: var(--success); color: #fff; }
+  .punch-btn.out { background: var(--primary); color: #fff; }
+  .punch-btn:disabled {
+    background: var(--gray-200);
+    color: var(--gray-400);
+    cursor: not-allowed;
+  }
+
+  /* ── Today Records ── */
+  .record-list { padding: 0 16px 12px; }
+  .record-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--gray-50);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    gap: 12px;
+  }
+  .record-type {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  .record-type.in { background: var(--success-light); color: var(--success); }
+  .record-type.out { background: var(--primary-light); color: var(--primary); }
+  .record-type.patch { background: var(--warning-light); color: var(--warning); }
+  .record-info { flex: 1; }
+  .record-time { font-size: 18px; font-weight: 700; color: var(--gray-900); }
+  .record-raw { font-size: 12px; color: var(--gray-400); }
+  .record-store { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+  .record-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 700;
+  }
+  .record-tag.patch { background: var(--warning-light); color: var(--warning); }
+  .record-tag.support { background: #f0f9ff; color: #0284c7; }
+  .record-tag.anomaly { background: var(--danger-light); color: var(--danger); }
+
+  /* ── Stats Row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    padding: 0 16px 12px;
+  }
+  .stat-box {
+    background: var(--gray-50);
+    border-radius: 10px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .stat-num { font-size: 22px; font-weight: 800; color: var(--gray-900); }
+  .stat-label { font-size: 11px; color: var(--gray-500); margin-top: 3px; font-weight: 600; }
+  .stat-num.danger { color: var(--danger); }
+  .stat-num.success { color: var(--success); }
+  .stat-num.warning { color: var(--warning); }
+
+  /* ── Employee List (Manager) ── */
+  .emp-list { padding: 0 16px; }
+  .emp-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .emp-item:active { background: var(--gray-50); }
+  .emp-avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--primary-light);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--primary);
+    flex-shrink: 0;
+  }
+  .emp-name { font-size: 16px; font-weight: 700; color: var(--gray-900); }
+  .emp-meta { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+  .emp-status {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .emp-status.ok { background: var(--success-light); color: var(--success); }
+  .emp-status.late { background: var(--warning-light); color: var(--warning); }
+  .emp-status.absent { background: var(--danger-light); color: var(--danger); }
+  .emp-status.off { background: var(--gray-100); color: var(--gray-500); }
+  .emp-status.support { background: #f0f9ff; color: #0284c7; }
+
+  /* ── Anomaly ── */
+  .anomaly-item {
+    padding: 14px;
+    border-radius: 10px;
+    margin: 0 16px 10px;
+    border-left: 4px solid var(--danger);
+    background: var(--danger-light);
+  }
+  .anomaly-item.warning {
+    border-left-color: var(--warning);
+    background: var(--warning-light);
+  }
+  .anomaly-item.info {
+    border-left-color: var(--primary);
+    background: var(--primary-light);
+  }
+  .anomaly-title { font-size: 15px; font-weight: 700; color: var(--gray-900); }
+  .anomaly-sub { font-size: 13px; color: var(--gray-600); margin-top: 4px; }
+  .anomaly-time { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+
+  /* ── Form ── */
+  .form-group { padding: 0 16px 14px; }
+  .form-label { font-size: 14px; font-weight: 700; color: var(--gray-700); margin-bottom: 6px; }
+  .form-input, .form-select, .form-textarea {
+    width: 100%;
+    padding: 13px 14px;
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+    font-size: 16px;
+    color: var(--gray-900);
+    background: var(--gray-50);
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--primary);
+    background: #fff;
+  }
+  .form-textarea { resize: vertical; min-height: 80px; }
+
+  /* ── Big Action Button ── */
+  .action-btn {
+    display: block;
+    width: calc(100% - 32px);
+    margin: 0 16px 12px;
+    padding: 16px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 17px;
+    font-weight: 800;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .action-btn:active { transform: scale(0.98); }
+  .action-btn.primary { background: var(--primary); color: #fff; }
+  .action-btn.success { background: var(--success); color: #fff; }
+  .action-btn.danger { background: var(--danger); color: #fff; }
+  .action-btn.ghost {
+    background: var(--gray-100);
+    color: var(--gray-700);
+    border: 1px solid var(--gray-200);
+  }
+
+  /* ── Month Stats Table ── */
+  .month-table-wrap { overflow-x: auto; padding: 0 16px 12px; }
+  .month-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .month-table th {
+    background: var(--gray-800);
+    color: #fff;
+    padding: 10px 8px;
+    text-align: center;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .month-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--gray-100);
+    text-align: center;
+    white-space: nowrap;
+  }
+  .month-table tr:last-child td { border-bottom: none; }
+  .month-table tr:nth-child(even) td { background: var(--gray-50); }
+  .badge-ot { color: var(--warning); font-weight: 700; }
+  .badge-ok { color: var(--success); font-weight: 700; }
+  .badge-warn { color: var(--danger); font-weight: 700; }
+
+  /* ── Store Selector ── */
+  .store-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .store-tab {
+    white-space: nowrap;
+    padding: 7px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    background: var(--white);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--gray-600);
+  }
+  .store-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+  }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 500;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-sheet {
+    width: 100%;
+    max-width: 430px;
+    background: var(--white);
+    border-radius: 20px 20px 0 0;
+    padding: 20px 0 30px;
+    animation: slideUp 0.25s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal-handle {
+    width: 40px; height: 4px;
+    background: var(--gray-300);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+  .modal-title {
+    font-size: 18px;
+    font-weight: 800;
+    padding: 0 20px 16px;
+    border-bottom: 1px solid var(--gray-100);
+    margin-bottom: 16px;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--gray-900);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 99px;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 999;
+    opacity: 0;
+    transition: all 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { background: var(--success); }
+  .toast.danger { background: var(--danger); }
+
+  /* ── Progress Bar ── */
+  .progress-wrap {
+    background: var(--gray-200);
+    border-radius: 99px;
+    height: 10px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-bar {
+    height: 100%;
+    border-radius: 99px;
+    background: var(--primary);
+    transition: width 0.5s ease;
+  }
+  .progress-bar.over { background: var(--warning); }
+
+  /* ── Setting item ── */
+  .setting-item {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--gray-100);
+    gap: 12px;
+    cursor: pointer;
+    background: var(--white);
+  }
+  .setting-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .setting-info { flex: 1; }
+  .setting-label { font-size: 16px; font-weight: 600; color: var(--gray-900); }
+  .setting-sub { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+  .setting-arrow { color: var(--gray-300); font-size: 18px; }
+
+  /* ── Punch Confirm Overlay ── */
+  .punch-confirm {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 600;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .punch-confirm.open { display: flex; }
+  .punch-confirm-box {
+    background: #fff;
+    border-radius: 20px;
+    padding: 32px 24px;
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+    animation: popIn 0.25s ease;
+  }
+  @keyframes popIn { from { transform: scale(0.85); opacity:0; } to { transform: scale(1); opacity:1; } }
+  .confirm-icon { font-size: 52px; margin-bottom: 12px; }
+  .confirm-title { font-size: 22px; font-weight: 800; color: var(--gray-900); }
+  .confirm-time { font-size: 38px; font-weight: 800; letter-spacing: -1px; margin: 8px 0; }
+  .confirm-raw { font-size: 13px; color: var(--gray-400); }
+  .confirm-store { font-size: 14px; color: var(--gray-600); margin-top: 4px; }
+  .confirm-btns { display: flex; gap: 10px; margin-top: 20px; }
+  .confirm-btns button {
+    flex: 1; padding: 14px; border: none;
+    border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  .confirm-cancel { background: var(--gray-100); color: var(--gray-700); }
+  .confirm-ok { background: var(--success); color: #fff; }
+  .confirm-ok.out-type { background: var(--primary); }
+
+  /* ── Divider ── */
+  .divider { height: 8px; background: var(--gray-100); margin-bottom: 0; }
+
+  /* ── Info row ── */
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-key { font-size: 14px; color: var(--gray-500); }
+  .info-val { font-size: 14px; font-weight: 700; color: var(--gray-900); }
+
+  /* Nav hidden for some pages */
+  .hide-nav .bottom-nav { display: none; }
+
+
+  /* ── File Upload ── */
+  .file-upload-box{margin:0 16px 12px;border:2px dashed var(--gray-300);border-radius:12px;padding:18px;text-align:center;cursor:pointer;transition:all .15s;background:var(--gray-50)}
+  .file-upload-box:hover,.file-upload-box.has-file{border-color:var(--primary);background:var(--primary-light)}
+  .file-upload-box.has-file{border-color:var(--success);background:var(--success-light)}
+  .file-preview-img{max-width:100%;max-height:140px;border-radius:8px;margin-top:10px;object-fit:contain}
+
+
+  /* ── Login ── */
+  .login-page{display:none;position:fixed;inset:0;background:linear-gradient(160deg,#1e3a8a 0%,#2563eb 60%,#0ea5e9 100%);z-index:1000;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px}
+  .login-page.active{display:flex}
+  .login-logo{font-size:56px;margin-bottom:8px}
+  .login-title{font-size:26px;font-weight:800;color:#fff;margin-bottom:4px}
+  .login-sub{font-size:14px;color:rgba(255,255,255,.7);margin-bottom:32px;text-align:center}
+  .login-card{background:#fff;border-radius:20px;padding:28px 22px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  .login-lbl{font-size:14px;font-weight:700;color:var(--g700);margin-bottom:8px}
+  .login-input{width:100%;padding:14px 16px;border:2px solid var(--g200);border-radius:12px;font-size:22px;font-weight:700;letter-spacing:6px;color:var(--g900);outline:none;text-align:center;font-family:inherit;transition:border-color .15s;text-transform:uppercase}
+  .login-input:focus{border-color:var(--primary)}
+  .login-btn{width:100%;padding:15px;margin-top:12px;background:var(--primary);color:#fff;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;transition:all .15s}
+  .login-btn:active{transform:scale(.98)}
+  .login-err{font-size:13px;color:var(--danger);text-align:center;margin-top:10px;min-height:18px;font-weight:600}
+  /* ── Store Selector on punch page ── */
+  .store-select-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--g50);border-bottom:1px solid var(--g200)}
+  .store-select-label{font-size:13px;color:var(--g600);font-weight:600;white-space:nowrap}
+  .store-select-btn{flex:1;padding:7px 12px;border:1px solid var(--g200);border-radius:20px;background:#fff;font-size:13px;font-weight:700;cursor:pointer;color:var(--g700);text-align:left}
+  .store-select-btn.support{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+  /* ── Emp management ── */
+  .emp-mgr-card{background:#fff;border:1px solid var(--g200);border-radius:12px;padding:13px 14px;margin-bottom:8px}
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN PAGE -->
+<div class="login-page active" id="login-page">
+  <div class="login-logo">🏪</div>
+  <div class="login-title">門店打卡系統</div>
+  <div class="login-sub">第一次登入後系統會記住你<br>下次直接進入不需重新輸入</div>
+  <div class="login-card">
+    <div class="login-lbl">員工編號</div>
+    <input class="login-input" id="login-code" type="text" placeholder="EMP001" maxlength="12"
+      onkeydown="if(event.key==='Enter'){doLogin();}">
+    <button class="login-btn" onclick="doLogin()">🔑 登入</button>
+    <div class="login-err" id="login-err"></div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--g100);font-size:12px;color:var(--g400);text-align:center">
+      員工編號由主管設定・忘記請洽主管
+    </div>
+  </div>
+</div>
+
+<div class="phone-shell">
+
+  <!-- ════════════════════════════════
+       PAGE: 員工打卡 (clock)
+  ════════════════════════════════ -->
+  <div class="page active" id="page-clock">
+    <div class="role-banner">
+      <div>
+        <div class="role-label">員工打卡</div>
+        <div class="role-name">👤 陳小明・大安門市</div>
+      </div>
+      <button class="role-switch-btn" onclick="doLogout()" style="background:rgba(255,255,255,.15)">登出</button>
+    </div>
+
+    <!-- Clock -->
+    <!-- 跨店選擇 -->
+    <div class="store-select-bar" id="store-select-bar">
+      <span class="store-select-label">📍 打卡門市：</span>
+      <button class="store-select-btn" id="store-select-btn" onclick="openStorePicker()">
+        大安門市（我的門市）
+      </button>
+    </div>
+
+    <div class="clock-box">
+      <div class="clock-time" id="live-clock">--:--:--</div>
+      <div class="clock-date" id="live-date">載入中…</div>
+    </div>
+
+    <!-- GPS Status -->
+    <div class="gps-box" id="gps-box">
+      <div class="gps-icon">📍</div>
+      <div class="gps-info">
+        <div class="gps-status ok" id="gps-status-text">定位中…</div>
+        <div class="gps-detail" id="gps-detail-text">正在取得 GPS 位置</div>
+      </div>
+      <div class="gps-badge ok" id="gps-badge">取得中</div>
+    </div>
+
+    <!-- Punch Buttons -->
+    <div class="punch-grid">
+      <button class="punch-btn in" id="btn-in1" onclick="openPunchConfirm('IN1')">
+        <span>🟢</span>
+        <span>上班打卡</span>
+        <span class="punch-label">第一段</span>
+      </button>
+      <button class="punch-btn out" id="btn-out1" disabled onclick="openPunchConfirm('OUT1')">
+        <span>🔵</span>
+        <span>下班打卡</span>
+        <span class="punch-label">第一段</span>
+      </button>
+      <button class="punch-btn in" id="btn-in2" disabled onclick="openPunchConfirm('IN2')">
+        <span>🟢</span>
+        <span>上班打卡</span>
+        <span class="punch-label">第二段</span>
+      </button>
+      <button class="punch-btn out" id="btn-out2" disabled onclick="openPunchConfirm('OUT2')">
+        <span>🔵</span>
+        <span>下班打卡</span>
+        <span class="punch-label">第二段</span>
+      </button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Today's Records -->
+    <div class="section">
+      <div class="section-title">今日打卡紀錄</div>
+    </div>
+    <div class="record-list" id="today-records">
+      <!-- populated by JS -->
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <div class="section-title">本月累計</div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-num success" id="month-hours">142</div>
+        <div class="stat-label">累積工時 h</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num warning">2</div>
+        <div class="stat-label">遲到次數</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num danger">1</div>
+        <div class="stat-label">異常紀錄</div>
+      </div>
+    </div>
+
+    <!-- Anomaly Alert -->
+    <div class="anomaly-item warning" style="margin-top:4px;">
+      <div class="anomaly-title">⚠️ 遲到提醒</div>
+      <div class="anomaly-sub">3/18 上班遲到 12 分鐘，請確認</div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       PAGE: 員工 - 月統計
+  ════════════════════════════════ -->
+  <div class="page" id="page-mymonth">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title">我的月統計</div>
+        <div class="topbar-sub">2025 年 3 月・陳小明</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">本月工時概覽</div>
+      <div class="info-row">
+        <span class="info-key">基本工時要求</span>
+        <span class="info-val">176 小時</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">已累積工時</span>
+        <span class="info-val success" style="color:var(--success)">142 小時</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">剩餘天數</span>
+        <span class="info-val">5 天</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">預估完成</span>
+        <span class="info-val">✅ 可達標</span>
+      </div>
+      <div class="progress-wrap" style="margin-top:12px;">
+        <div class="progress-bar" style="width:80.7%"></div>
+      </div>
+      <div style="text-align:right;font-size:12px;color:var(--gray-400);margin-top:4px;">142 / 176 hrs</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">異常紀錄摘要</div>
+      <div class="info-row"><span class="info-key">遲到次數</span><span class="info-val warning" style="color:var(--warning)">2 次</span></div>
+      <div class="info-row"><span class="info-key">遲到總分鐘</span><span class="info-val">23 分鐘</span></div>
+      <div class="info-row"><span class="info-key">漏卡次數</span><span class="info-val">0 次</span></div>
+      <div class="info-row"><span class="info-key">異常紀錄</span><span class="info-val danger" style="color:var(--danger)">1 筆</span></div>
+    </div>
+
+    <div class="section"><div class="section-title">每日明細</div></div>
+    <div style="padding:0 16px 12px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:var(--gray-800);color:#fff;">
+            <th style="padding:8px;border-radius:8px 0 0 0;">日期</th>
+            <th style="padding:8px;">上班</th>
+            <th style="padding:8px;">下班</th>
+            <th style="padding:8px;border-radius:0 8px 0 0;">工時</th>
+          </tr>
+        </thead>
+        <tbody id="daily-detail">
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       PAGE: 主管 - 今日總覽
+  ════════════════════════════════ -->
+  <div class="page" id="page-overview">
+    <div class="role-banner" style="background:linear-gradient(135deg,#064e3b,#059669);">
+      <div>
+        <div class="role-label">主管管理端</div>
+        <div class="role-name">🏪 李主管・大安門市</div>
+      </div>
+      <button class="role-switch-btn" onclick="doLogout()" style="background:rgba(255,255,255,.15)">登出</button>
+    </div>
+
+    <!-- Store Tabs -->
+    <div class="store-tabs">
+      <div class="store-tab active" onclick="selectStore(this,'大安門市')">🏪 大安門市</div>
+      <div class="store-tab" onclick="selectStore(this,'信義門市')">🏪 信義門市</div>
+      <div class="store-tab" onclick="selectStore(this,'中山門市')">🏪 中山門市</div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-num">8</div>
+        <div class="stat-label">今日應到</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num success">5</div>
+        <div class="stat-label">已到班</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num danger" id="anomaly-count">3</div>
+        <div class="stat-label">異常人數</div>
+      </div>
+    </div>
+
+    <div class="section"><div class="section-title">今日打卡狀況</div></div>
+    <div class="emp-list" id="emp-list-today">
+      <!-- populated by JS -->
+    </div>
+
+    <!-- 異常紀錄 (整合在總覽頁) -->
+    <div style="height:8px;background:var(--gray-100);margin-top:4px"></div>
+    <div style="padding:14px 16px 6px;display:flex;align-items:center;justify-content:space-between">
+      <div class="section-title" style="margin-bottom:0">⚠️ 本月異常紀錄</div>
+      <span id="overview-anom-badge" style="background:var(--danger);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;display:none">0</span>
+    </div>
+    <div id="overview-anomaly-list" style="padding:0 16px 12px"></div>
+  </div>
+
+  <!-- ════════════════════════════════
+       PAGE: 主管 - 異常紀錄（備用頁，不在導覽列）
+  ════════════════════════════════ -->
+  <div class="page" id="page-anomaly">
+    <div class="topbar">
+      <div style="flex:1;">
+        <div class="topbar-title">異常紀錄</div>
+        <div class="topbar-sub">2025 年 3 月・大安門市</div>
+      </div>
+      <span class="topbar-badge">5</span>
+    </div>
+
+    <div class="section" style="padding-top:12px;"><div class="section-title">未處理異常</div></div>
+
+    <div class="anomaly-item" id="anom-1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="anomaly-title">🔴 漏卡－陳小明</div>
+          <div class="anomaly-sub">3/27 下班未打卡 (OUT1 遺漏)</div>
+          <div class="anomaly-time">大安門市・3月27日</div>
+        </div>
+        <button onclick="showPatchModal('陳小明','OUT1','2025-03-27')" style="background:var(--danger);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">補卡</button>
+      </div>
+    </div>
+
+    <div class="anomaly-item warning">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="anomaly-title">⚠️ 遲到－王大華</div>
+          <div class="anomaly-sub">3/27 遲到 18 分鐘 (應到 09:00，實到 09:18)</div>
+          <div class="anomaly-time">大安門市・3月27日</div>
+        </div>
+        <button onclick="showToast('已確認遲到紀錄','success')" style="background:var(--warning);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">確認</button>
+      </div>
+    </div>
+
+    <div class="anomaly-item">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="anomaly-title">🔴 超距離打卡－林美玲</div>
+          <div class="anomaly-sub">3/26 打卡時距離門市 520 公尺 (限 300 公尺)</div>
+          <div class="anomaly-time">大安門市・3月26日</div>
+        </div>
+        <button onclick="showToast('已標記為例外','success')" style="background:var(--gray-500);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">豁免</button>
+      </div>
+    </div>
+
+    <div class="anomaly-item info">
+      <div>
+        <div class="anomaly-title">🔵 補卡紀錄－張志明</div>
+        <div class="anomaly-sub">3/25 IN1 由李主管補登 (手機故障)</div>
+        <div class="anomaly-time">大安門市・3月25日・補登主管：李主管</div>
+      </div>
+    </div>
+
+    <div class="anomaly-item warning">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="anomaly-title">⚠️ 跨店支援打卡－陳小明</div>
+          <div class="anomaly-sub">3/24 在信義門市打卡 (非所屬門市)</div>
+          <div class="anomaly-time">信義門市・3月24日・已標註支援</div>
+        </div>
+        <button onclick="showToast('已確認支援紀錄','success')" style="background:var(--warning);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">確認</button>
+      </div>
+    </div>
+
+    <div style="height:8px;"></div>
+    <div class="section"><div class="section-title">本月異常統計</div></div>
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-num danger">8</div><div class="stat-label">漏卡</div></div>
+      <div class="stat-box"><div class="stat-num warning">12</div><div class="stat-label">遲到</div></div>
+      <div class="stat-box"><div class="stat-num">3</div><div class="stat-label">超距離</div></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       PAGE: 補卡申請
+  ════════════════════════════════ -->
+  <div class="page" id="page-patch">
+    <div class="topbar">
+      <button class="back-btn" onclick="goBack()">←</button>
+      <div>
+        <div class="topbar-title">補卡登記</div>
+        <div class="topbar-sub">主管補登・留存完整紀錄</div>
+      </div>
+    </div>
+
+    <div style="height:12px;"></div>
+
+    <div class="form-group">
+      <div class="form-label">補卡員工</div>
+      <select class="form-select" id="patch-emp">
+        <option>陳小明</option>
+        <option>王大華</option>
+        <option>林美玲</option>
+        <option>張志明</option>
+        <option>黃淑芬</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <div class="form-label">補卡門市</div>
+      <select class="form-select" id="patch-store">
+        <option>大安門市</option>
+        <option>信義門市</option>
+        <option>中山門市</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <div class="form-label">補卡日期</div>
+      <input type="date" class="form-input" id="patch-date" value="2025-03-27">
+    </div>
+
+    <div class="form-group">
+      <div class="form-label">打卡類型</div>
+      <select class="form-select" id="patch-type">
+        <option value="IN1">IN1 - 第一段上班</option>
+        <option value="OUT1">OUT1 - 第一段下班</option>
+        <option value="IN2">IN2 - 第二段上班</option>
+        <option value="OUT2">OUT2 - 第二段下班</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <div class="form-label">補卡時間</div>
+      <input type="time" class="form-input" id="patch-time" value="18:00">
+    </div>
+
+    <div class="form-group">
+      <div class="form-label">補卡原因</div>
+      <textarea class="form-textarea" id="patch-reason" placeholder="請填寫補卡原因（必填）&#10;例如：員工手機故障無法開啟 LINE"></textarea>
+    </div>
+
+    <!-- Preview rounded time -->
+    <div class="card">
+      <div class="card-title">系統時間計算預覽</div>
+      <div class="info-row">
+        <span class="info-key">原始輸入時間</span>
+        <span class="info-val" id="patch-raw-time">18:00</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">計算後時間 ▼</span>
+        <span class="info-val" style="color:var(--primary)" id="patch-calc-time">18:00</span>
+      </div>
+      <div style="font-size:12px;color:var(--gray-400);margin-top:4px;">* 系統自動向下取整至整點或半點</div>
+    </div>
+
+    <div class="card" style="background:var(--warning-light);border:1px solid #fcd34d;">
+      <div style="font-size:13px;color:var(--warning);font-weight:700;">⚠️ 補卡將標記為異常紀錄</div>
+      <div style="font-size:12px;color:var(--gray-600);margin-top:4px;">此筆打卡紀錄將標示「補卡」，並記錄補登主管與時間，不可刪除。</div>
+    </div>
+
+    <button class="action-btn success" onclick="submitPatch()">✅ 確認補卡登記</button>
+  </div>
+
+  <!-- ════════════════════════════════
+       PAGE: 主管 - 月統計
+  ════════════════════════════════ -->
+  <div class="page" id="page-month">
+    <div class="topbar">
+      <div style="flex:1;">
+        <div class="topbar-title">月工時統計</div>
+        <div class="topbar-sub">2025 年 3 月・大安門市</div>
+      </div>
+    </div>
+
+    <!-- Base hours setting -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">基本工時設定</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="number" class="form-input" id="base-hours" value="176" style="flex:1;padding:10px 12px;font-size:18px;font-weight:700;">
+        <span style="font-size:16px;color:var(--gray-600);font-weight:700;">小時 / 月</span>
+      </div>
+    </div>
+
+    <div class="section"><div class="section-title">員工月統計總覽</div></div>
+    <div class="month-table-wrap">
+      <table class="month-table">
+        <thead>
+          <tr>
+            <th>姓名</th>
+            <th>工時 h</th>
+            <th>加班 h</th>
+            <th>遲到</th>
+            <th>漏卡</th>
+            <th>狀態</th>
+          </tr>
+        </thead>
+        <tbody id="month-tbody">
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section" style="margin-top:8px;"><div class="section-title">門市工時排行</div></div>
+    <div style="padding:0 16px 12px;">
+      <div id="store-rank"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       PAGE: 設定
+  ════════════════════════════════ -->
+  <div class="page" id="page-settings">
+    <div class="topbar">
+      <div class="topbar-title">系統設定</div>
+    </div>
+
+    <div style="padding:12px 16px 6px;font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;">門市管理</div>
+
+    <div class="setting-item" onclick="showStoreSettings()">
+      <div class="setting-icon" style="background:#eff6ff;">🏪</div>
+      <div class="setting-info">
+        <div class="setting-label">門市設定</div>
+        <div class="setting-sub">管理門市名稱、GPS 座標、打卡範圍</div>
+      </div>
+      <div class="setting-arrow">›</div>
+    </div>
+    <div class="setting-item" onclick="goToEmpManage()">
+      <div class="setting-icon" style="background:#f0fdf4;">👥</div>
+      <div class="setting-info">
+        <div class="setting-label">員工管理</div>
+        <div class="setting-sub">新增、編輯、停用員工・設定所屬門市</div>
+      </div>
+      <div class="setting-arrow">›</div>
+    </div>
+
+    <div style="padding:12px 16px 6px;font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-top:4px;">系統規則</div>
+
+    <div class="setting-item">
+      <div class="setting-icon" style="background:#fffbeb;">⏰</div>
+      <div class="setting-info">
+        <div class="setting-label">時間取整規則</div>
+        <div class="setting-sub">向下取整至整點 / 半點</div>
+      </div>
+      <div style="font-size:12px;color:var(--primary);font-weight:700;">已啟用</div>
+    </div>
+    <div class="setting-item">
+      <div class="setting-icon" style="background:#fef2f2;">📍</div>
+      <div class="setting-info">
+        <div class="setting-label">GPS 打卡限制</div>
+        <div class="setting-sub">各門市獨立設定允許範圍</div>
+      </div>
+      <div style="font-size:12px;color:var(--primary);font-weight:700;">已啟用</div>
+    </div>
+    <div class="setting-item" onclick="showToast('月基本工時：176 小時','success')">
+      <div class="setting-icon" style="background:#f0fdf4;">📊</div>
+      <div class="setting-info">
+        <div class="setting-label">月基本工時</div>
+        <div class="setting-sub">目前設定：176 小時</div>
+      </div>
+      <div class="setting-arrow">›</div>
+    </div>
+
+    <div style="padding:12px 16px 6px;font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-top:4px;">匯出 / 整合</div>
+
+    <div class="setting-item" onclick="showToast('功能開發中，請等待正式版','')">
+      <div class="setting-icon" style="background:#f0fdf4;">📋</div>
+      <div class="setting-info">
+        <div class="setting-label">匯出 Google Sheets</div>
+        <div class="setting-sub">月報表一鍵匯出</div>
+      </div>
+      <div class="setting-arrow">›</div>
+    </div>
+    <div class="setting-item" onclick="showToast('LINE LIFF 串接說明已複製','success')">
+      <div class="setting-icon" style="background:#dcfce7;">💬</div>
+      <div class="setting-info">
+        <div class="setting-label">LINE LIFF 設定說明</div>
+        <div class="setting-sub">查看串接指南</div>
+      </div>
+      <div class="setting-arrow">›</div>
+    </div>
+
+    <!-- Store info cards -->
+    <div style="padding:12px 16px 6px;font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-top:4px;">門市一覽</div>
+    <div id="store-cards-list" style="padding:0 16px 16px;"></div>
+  </div>
+
+
+  <!-- ════════════════════════════════
+       PAGE: 主管 - 今日出勤確認
+  ════════════════════════════════ -->
+  <div class="page" id="page-daily-review">
+    <div class="topbar">
+      <div style="flex:1;">
+        <div class="topbar-title">今日出勤確認</div>
+        <div class="topbar-sub" id="review-date-sub">主管每日必做</div>
+      </div>
+      <button id="review-submit-btn" onclick="submitDailyReview()"
+        style="background:var(--success);color:#fff;border:none;padding:8px 16px;
+        border-radius:20px;font-size:13px;font-weight:800;cursor:pointer;">
+        完成確認
+      </button>
+    </div>
+    <div style="background:var(--primary-light);padding:12px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #bfdbfe;">
+      <div style="font-size:20px;">📋</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--primary);">主管每日作業流程</div>
+        <div style="font-size:12px;color:var(--gray-600);">① 查看各員工實際打卡時間 → ② 打勾確認遲到者 → ③ 按「完成確認」送出</div>
+      </div>
+    </div>
+    <div class="store-tabs" id="review-store-tabs"></div>
+    <div style="display:flex;gap:10px;padding:8px 16px 4px;flex-wrap:wrap;align-items:center;">
+      <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--gray-500);">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--success);display:inline-block;"></span>準時
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--gray-500);">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--danger);display:inline-block;"></span>遲到
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--gray-500);">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--gray-300);display:inline-block;"></span>未到/休假
+      </div>
+      <div style="margin-left:auto;font-size:12px;color:var(--primary);font-weight:700;" id="review-summary-badge"></div>
+    </div>
+    <div id="review-emp-list" style="padding:8px 16px 16px;"></div>
+  </div>
+
+  <!-- ════════════════════════════════
+       PAGE: 員工 - 申請假單
+  ════════════════════════════════ -->
+  <div class="page" id="page-leave-apply">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title">申請假單</div>
+        <div class="topbar-sub">陳小明・大安門市</div>
+      </div>
+    </div>
+    <div style="padding:14px 16px 0;">
+      <div class="section-title">選擇假別</div>
+      <div id="leave-type-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;"></div>
+    </div>
+    <div id="leave-type-banner" style="display:none;margin:10px 16px 0;padding:12px 14px;border-radius:10px;background:var(--primary-light);border:1px solid #bfdbfe;">
+      <div id="leave-banner-name" style="font-size:15px;font-weight:800;color:var(--primary);"></div>
+      <div id="leave-banner-rule" style="font-size:12px;color:var(--gray-600);margin-top:3px;line-height:1.5;"></div>
+    </div>
+    <div style="padding:14px 16px 0;"><div class="section-title">請假資訊</div></div>
+    <div class="form-group" style="padding:10px 16px 8px;">
+      <div class="form-label">請假日期</div>
+      <input type="date" class="form-input" id="leave-date" value="2025-03-28">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px 8px;">
+      <div>
+        <div class="form-label" style="font-size:14px;font-weight:700;color:var(--gray-700);margin-bottom:6px;">開始時間</div>
+        <input type="time" class="form-input" id="leave-start" value="09:00" oninput="calcLeaveHours()">
+      </div>
+      <div>
+        <div class="form-label" style="font-size:14px;font-weight:700;color:var(--gray-700);margin-bottom:6px;">結束時間</div>
+        <input type="time" class="form-input" id="leave-end" value="18:00" oninput="calcLeaveHours()">
+      </div>
+    </div>
+    <div style="margin:0 16px 10px;padding:14px;background:var(--gray-50);border-radius:10px;border:1px solid var(--gray-200);">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:14px;color:var(--gray-600);font-weight:600;">請假時數</span>
+        <span id="leave-hours-display" style="font-size:26px;font-weight:800;color:var(--primary);">9.0 小時</span>
+      </div>
+      <div id="leave-hours-warn" style="font-size:12px;color:var(--danger);margin-top:4px;display:none;"></div>
+    </div>
+    <div class="form-group" style="padding:0 16px 8px;">
+      <div class="form-label">請假原因（選填）</div>
+      <textarea class="form-textarea" id="leave-reason" placeholder="例：身體不適需就醫" style="min-height:70px;"></textarea>
+    </div>
+    <div id="leave-doc-notice" style="display:none;margin:0 16px 10px;padding:12px 14px;background:var(--warning-light);border-radius:10px;border-left:4px solid var(--warning);">
+      <div style="font-size:13px;font-weight:700;color:var(--warning);">⚠️ 此假別可能需附證明文件</div>
+      <div id="leave-doc-text" style="font-size:12px;color:var(--gray-600);margin-top:3px;"></div>
+    </div>
+    <!-- 附圖上傳區（需附圖的假別才顯示） -->
+    <div id="leave-doc-section" style="display:none">
+      <div style="margin:0 16px 8px;padding:11px 13px;background:var(--warning-light);border-radius:10px;border-left:4px solid var(--warning)">
+        <div style="font-size:13px;font-weight:700;color:var(--warning)">⚠️ 此假別需附上證明文件圖片</div>
+        <div id="leave-doc-hint" style="font-size:12px;color:var(--gray-600);margin-top:3px"></div>
+      </div>
+      <div class="file-upload-box" id="leave-upload-box" onclick="document.getElementById('leave-file').click()">
+        <div style="font-size:26px;margin-bottom:6px">📎</div>
+        <div id="upload-main-text" style="font-size:14px;font-weight:600;color:var(--gray-600)">點此上傳證明圖片</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:3px">支援 JPG、PNG、PDF，最大 5MB</div>
+        <img id="leave-file-preview" class="file-preview-img" style="display:none">
+      </div>
+      <input type="file" id="leave-file" accept="image/*,.pdf" style="display:none" onchange="handleLeaveFile(this)">
+      <div id="leave-file-name" style="text-align:center;font-size:12px;color:var(--gray-500);margin:-4px 16px 8px;display:none"></div>
+    </div>
+    <button class="action-btn primary" onclick="submitLeaveApply()">📤 送出請假申請</button>
+    <div style="padding:4px 16px 8px;"><div class="section-title">我的請假紀錄</div></div>
+    <div id="my-leave-list" style="padding:0 16px 12px;"></div>
+  </div>
+
+  <!-- ════════════════════════════════
+       PAGE: 主管 - 假單審核
+  ════════════════════════════════ -->
+  <div class="page" id="page-leave-review">
+    <div class="topbar">
+      <div style="flex:1;">
+        <div class="topbar-title">假單審核</div>
+        <div class="topbar-sub">待審核請假申請</div>
+      </div>
+      <span class="topbar-badge" id="leave-pending-badge">3</span>
+    </div>
+    <div style="display:flex;border-bottom:2px solid var(--gray-100);margin-bottom:4px;">
+      <button id="ltab-pending" onclick="switchLeaveTab('pending')"
+        style="flex:1;padding:12px;border:none;background:transparent;font-size:14px;font-weight:700;
+        color:var(--primary);border-bottom:2px solid var(--primary);cursor:pointer;">待審核</button>
+      <button id="ltab-history" onclick="switchLeaveTab('history')"
+        style="flex:1;padding:12px;border:none;background:transparent;font-size:14px;font-weight:700;
+        color:var(--gray-400);cursor:pointer;">已處理</button>
+    </div>
+    <div id="leave-review-list" style="padding:8px 16px 16px;"></div>
+  </div>
+
+  <!-- ════════════════════════════════
+       BOTTOM NAV
+  ════════════════════════════════ -->
+  <nav class="bottom-nav" id="main-nav">
+    <!-- Employee nav (default) -->
+    <div id="nav-employee" style="display:contents;">
+      <button class="nav-btn active" onclick="showPage('page-clock','nav-employee',0)" id="nav-e-0">
+        <span class="nav-icon">🕐</span>打卡
+      </button>
+      <button class="nav-btn" onclick="showPage('page-leave-apply','nav-employee',1);renderLeaveApplyPage()" id="nav-e-1">
+        <span class="nav-icon">📋</span>請假
+      </button>
+      <button class="nav-btn" onclick="showPage('page-mymonth','nav-employee',2)" id="nav-e-2">
+        <span class="nav-icon">📅</span>月統計
+      </button>
+    </div>
+  </nav>
+
+</div><!-- /phone-shell -->
+
+
+<!-- ════════════════
+     PAGE: 員工管理（主管）
+════════════════ -->
+<div class="page" id="page-emp-manage">
+  <div class="topbar">
+    <div style="flex:1"><div class="topbar-title">員工管理</div><div class="topbar-sub">新增、編輯、停用員工</div></div>
+    <button onclick="showAddEmpForm()"
+      style="background:var(--primary);color:#fff;border:none;padding:8px 14px;border-radius:20px;font-size:13px;font-weight:800;cursor:pointer">
+      ＋ 新增
+    </button>
+  </div>
+
+  <!-- Add form -->
+  <div id="add-emp-form" style="display:none;margin:10px 14px;padding:14px;background:var(--primary-light);border:2px solid var(--primary);border-radius:14px">
+    <div style="font-size:15px;font-weight:800;color:var(--primary);margin-bottom:10px">➕ 新增員工</div>
+    <div style="margin-bottom:8px">
+      <div class="form-label" style="font-size:13px">姓名 *</div>
+      <input class="form-input" id="ne-name" placeholder="例：王小明" style="padding:10px 12px;font-size:15px">
+    </div>
+    <div style="margin-bottom:8px">
+      <div class="form-label" style="font-size:13px">員工編號 * <span style="font-size:11px;color:var(--gray-400)">（用此編號登入）</span></div>
+      <input class="form-input" id="ne-code" placeholder="例：EMP005" style="padding:10px 12px;font-size:15px;letter-spacing:2px;text-transform:uppercase">
+    </div>
+    <div style="margin-bottom:8px">
+      <div class="form-label" style="font-size:13px">所屬門市 *</div>
+      <select class="form-select" id="ne-store" style="padding:10px 12px;font-size:14px"></select>
+    </div>
+    <div style="margin-bottom:12px">
+      <div class="form-label" style="font-size:13px">角色</div>
+      <select class="form-select" id="ne-role" style="padding:10px 12px;font-size:14px">
+        <option value="employee">員工</option>
+        <option value="manager">主管</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="confirmAddEmp()" style="flex:1;padding:12px;background:var(--success);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer">✅ 確認新增</button>
+      <button onclick="document.getElementById('add-emp-form').style.display='none'" style="padding:12px 16px;background:#fff;color:var(--gray-700);border:1px solid var(--gray-200);border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">取消</button>
+    </div>
+    <div id="add-emp-err" style="font-size:13px;color:var(--danger);margin-top:8px;text-align:center"></div>
+  </div>
+
+  <div id="emp-manage-list" style="padding:8px 14px 14px"></div>
+</div>
+
+<!-- ════════════════════════════════
+     PUNCH CONFIRM OVERLAY
+════════════════════════════════ -->
+<div class="punch-confirm" id="punch-confirm">
+  <div class="punch-confirm-box">
+    <div class="confirm-icon" id="confirm-icon">🟢</div>
+    <div class="confirm-title" id="confirm-title">上班打卡</div>
+    <div class="confirm-time" id="confirm-time">09:00</div>
+    <div class="confirm-raw" id="confirm-raw">原始時間：09:03</div>
+    <div class="confirm-store" id="confirm-store">📍 大安門市・距離 42m</div>
+    <div class="confirm-btns">
+      <button class="confirm-cancel" onclick="closePunchConfirm()">取消</button>
+      <button class="confirm-ok" id="confirm-ok-btn" onclick="doPunch()">確認打卡</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     PATCH MODAL
+════════════════════════════════ -->
+<div class="modal-overlay" id="patch-modal-overlay" onclick="closePatchModal(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">快速補卡</div>
+    <div class="form-group">
+      <div class="form-label">員工</div>
+      <select class="form-select" id="quick-emp"><option>陳小明</option><option>王大華</option><option>林美玲</option></select>
+    </div>
+    <div class="form-group">
+      <div class="form-label">補卡類型</div>
+      <select class="form-select" id="quick-type"><option>IN1</option><option>OUT1</option><option>IN2</option><option>OUT2</option></select>
+    </div>
+    <div class="form-group">
+      <div class="form-label">補卡時間</div>
+      <input type="time" class="form-input" id="quick-time" value="18:00">
+    </div>
+    <button class="action-btn success" onclick="submitQuickPatch()">✅ 確認補卡</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     STORE SETTINGS MODAL
+════════════════════════════════ -->
+<div class="modal-overlay" id="store-modal" onclick="closeModal('store-modal',event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">門市設定</div>
+    <div id="store-settings-body" style="padding:0 20px;max-height:60vh;overflow-y:auto;"></div>
+    <button class="action-btn ghost" style="margin-top:8px;" onclick="closeModal('store-modal')">關閉</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     EMP SETTINGS MODAL
+════════════════════════════════ -->
+<div class="modal-overlay" id="emp-modal" onclick="closeModal('emp-modal',event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">員工設定</div>
+    <div id="emp-settings-body" style="padding:0 20px;max-height:65vh;overflow-y:auto;"></div>
+    <button class="action-btn ghost" style="margin-top:8px;" onclick="closeModal('emp-modal')">關閉</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════ -->
+<script>
+// ── Data ──────────────────────────────────────────────
+const STORES = [
+  { id:'s1', name:'大安門市', lat:25.0268, lng:121.5437, radius:300, active:true },
+  { id:'s2', name:'信義門市', lat:25.0393, lng:121.5703, radius:250, active:true },
+  { id:'s3', name:'中山門市', lat:25.0631, lng:121.5267, radius:300, active:true },
+];
+
+const EMPLOYEES = [
+  { id:'e1', name:'陳小明', code:'EMP001', store:'s1', role:'employee', active:true },
+  { id:'e2', name:'王大華', code:'EMP002', store:'s1', role:'employee', active:true },
+  { id:'e3', name:'林美玲', code:'EMP003', store:'s1', role:'employee', active:true },
+  { id:'e4', name:'張志明', code:'EMP004', store:'s1', role:'employee', active:true },
+  { id:'e5', name:'黃淑芬', code:'EMP005', store:'s2', role:'employee', active:true },
+  { id:'e6', name:'劉建國', code:'EMP006', store:'s2', role:'employee', active:true },
+  { id:'e7', name:'吳雅婷', code:'EMP007', store:'s1', role:'employee', active:true },
+  { id:'e8', name:'周嘉豪', code:'EMP008', store:'s3', role:'employee', active:true },
+  { id:'m1', name:'李主管', code:'MGR001', store:'s1', role:'manager', active:true },
+];
+
+const MONTH_DATA = [
+  { emp:'陳小明', hours:142, ot:0, late:2, miss:0, anomaly:1 },
+  { emp:'王大華', hours:168, ot:0, late:3, miss:1, anomaly:2 },
+  { emp:'林美玲', hours:180, ot:4, late:0, miss:0, anomaly:1 },
+  { emp:'張志明', hours:155, ot:0, late:1, miss:0, anomaly:1 },
+  { emp:'黃淑芬', hours:176, ot:0, late:0, miss:0, anomaly:0 },
+  { emp:'劉建國', hours:120, ot:0, late:5, miss:3, anomaly:5 },
+  { emp:'吳雅婷', hours:184, ot:8, late:0, miss:0, anomaly:0 },
+  { emp:'周嘉豪', hours:160, ot:0, late:2, miss:1, anomaly:2 },
+];
+
+const DAILY_RECORDS = [
+  { date:'3/27', in1:'09:00', out1:'14:00', in2:'15:00', out2:'18:30', hours:8.5, note:'' },
+  { date:'3/26', in1:'08:30', out1:'13:00', in2:'14:00', out2:'19:00', hours:9.5, note:'' },
+  { date:'3/25', in1:'09:00', out1:'17:00', in2:'', out2:'', hours:8, note:'' },
+  { date:'3/24', in1:'09:00', out1:'14:00', in2:'15:00', out2:'18:00', hours:8, note:'支援' },
+  { date:'3/23', in1:'09:00', out1:'14:00', in2:'15:00', out2:'19:00', hours:9, note:'' },
+  { date:'3/22', in1:'休', out1:'', in2:'', out2:'', hours:0, note:'休假' },
+  { date:'3/21', in1:'09:30', out1:'14:00', in2:'15:00', out2:'18:00', hours:7.5, note:'遲到' },
+];
+
+const TODAY_EMP_STATUS = [
+  { name:'陳小明', in1:'09:00', out1:'14:30', in2:'15:00', out2:'', status:'ok', store:'大安門市', support:false },
+  { name:'王大華', in1:'09:18', out1:'14:00', in2:'15:00', out2:'18:30', status:'late', store:'大安門市', support:false },
+  { name:'林美玲', in1:'08:30', out1:'', in2:'', out2:'', status:'ok', store:'大安門市', support:false },
+  { name:'張志明', in1:'09:00', out1:'13:30', in2:'14:00', out2:'17:30', status:'ok', store:'大安門市', support:false },
+  { name:'黃淑芬', in1:'', out1:'', in2:'', out2:'', status:'absent', store:'信義門市', support:true },
+  { name:'劉建國', in1:'', out1:'', in2:'', out2:'', status:'absent', store:'信義門市', support:false },
+  { name:'吳雅婷', in1:'休', out1:'', in2:'', out2:'', status:'off', store:'大安門市', support:false },
+  { name:'周嘉豪', in1:'09:00', out1:'15:00', in2:'', out2:'', status:'support', store:'中山門市', support:true },
+];
+
+// ── State ─────────────────────────────────────────────
+let currentRole = 'employee'; // 'employee' | 'manager'
+let currentPage = 'page-clock';
+let punchState = { in1:null, out1:null, in2:null, out2:null }; // null = not done
+let pendingPunchType = '';
+let gpsOk = false;
+
+// ── Clock ─────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  const el = document.getElementById('live-clock');
+  if(el) el.textContent = `${h}:${m}:${s}`;
+  const days = ['日','一','二','三','四','五','六'];
+  const dateStr = `${now.getFullYear()} 年 ${now.getMonth()+1} 月 ${now.getDate()} 日 (週${days[now.getDay()]})`;
+  const del = document.getElementById('live-date');
+  if(del) del.textContent = dateStr;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── GPS Simulation ─────────────────────────────────────
+function simulateGPS() {
+  setTimeout(() => {
+    const ok = Math.random() > 0.25;
+    gpsOk = ok;
+    const dist = ok ? Math.floor(Math.random()*200+20) : Math.floor(Math.random()*300+310);
+    document.getElementById('gps-status-text').textContent = ok ? '✅ 位於可打卡範圍內' : '❌ 超出打卡範圍';
+    document.getElementById('gps-status-text').className = `gps-status ${ok?'ok':'fail'}`;
+    document.getElementById('gps-detail-text').textContent = `距大安門市 ${dist} 公尺（允許 300 公尺）`;
+    document.getElementById('gps-badge').textContent = ok ? '可打卡' : '超出範圍';
+    document.getElementById('gps-badge').className = `gps-badge ${ok?'ok':'fail'}`;
+    updatePunchButtons();
+  }, 1200);
+}
+simulateGPS();
+
+// ── Round Time ─────────────────────────────────────────
+function roundDown(h, m) {
+  return m >= 30 ? `${String(h).padStart(2,'0')}:30` : `${String(h).padStart(2,'0')}:00`;
+}
+function getRoundedNow() {
+  const now = new Date();
+  return roundDown(now.getHours(), now.getMinutes());
+}
+function getRawNow() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+}
+
+// ── Punch State ───────────────────────────────────────
+function updatePunchButtons() {
+  const s = punchState;
+  const b1 = document.getElementById('btn-in1');
+  const b2 = document.getElementById('btn-out1');
+  const b3 = document.getElementById('btn-in2');
+  const b4 = document.getElementById('btn-out2');
+  if(!b1) return;
+
+  b1.disabled = !!s.in1 || !gpsOk;
+  b2.disabled = !s.in1 || !!s.out1 || !gpsOk;
+  b3.disabled = !s.out1 || !!s.in2 || !gpsOk;
+  b4.disabled = !s.in2 || !!s.out2 || !gpsOk;
+
+  // Visual: done state
+  if(s.in1) { b1.style.background='#dcfce7'; b1.style.color='var(--success)'; b1.innerHTML='<span>✅</span><span>已打卡</span><span class="punch-label">IN1 '+s.in1+'</span>'; }
+  if(s.out1){ b2.style.background='#dbeafe'; b2.style.color='var(--primary)'; b2.innerHTML='<span>✅</span><span>已打卡</span><span class="punch-label">OUT1 '+s.out1+'</span>'; }
+  if(s.in2) { b3.style.background='#dcfce7'; b3.style.color='var(--success)'; b3.innerHTML='<span>✅</span><span>已打卡</span><span class="punch-label">IN2 '+s.in2+'</span>'; }
+  if(s.out2){ b4.style.background='#dbeafe'; b4.style.color='var(--primary)'; b4.innerHTML='<span>✅</span><span>已打卡</span><span class="punch-label">OUT2 '+s.out2+'</span>'; }
+}
+
+// ── Open Punch Confirm ────────────────────────────────
+function openPunchConfirm(type) {
+  if(!gpsOk) { showToast('❌ GPS 超出範圍，無法打卡','danger'); return; }
+  pendingPunchType = type;
+  const raw = getRawNow();
+  const calc = getRoundedNow();
+  const isIn = type.startsWith('IN');
+  const labels = { IN1:'第一段上班', OUT1:'第一段下班', IN2:'第二段上班', OUT2:'第二段下班' };
+  document.getElementById('confirm-icon').textContent = isIn ? '🟢' : '🔵';
+  document.getElementById('confirm-title').textContent = labels[type];
+  document.getElementById('confirm-time').textContent = calc;
+  document.getElementById('confirm-raw').textContent = `原始時間：${raw}`;
+  document.getElementById('confirm-store').textContent = '📍 大安門市・距離 42m';
+  const okBtn = document.getElementById('confirm-ok-btn');
+  okBtn.className = isIn ? 'confirm-ok' : 'confirm-ok out-type';
+  document.getElementById('punch-confirm').classList.add('open');
+}
+
+function closePunchConfirm() {
+  document.getElementById('punch-confirm').classList.remove('open');
+}
+
+function doPunch() {
+  var type = pendingPunchType;
+  var raw  = getRawNow();
+  var calc = getRoundedNow();
+  punchState[type.toLowerCase()] = calc;
+  closePunchConfirm();
+  updatePunchButtons();
+  renderTodayRecords();
+  showToast('✅ ' + type + ' 打卡成功 ' + calc, 'success');
+
+  // 儲存到 Google Sheets
+  if (API_URL && currentUser) {
+    var store = STORES.find(function(s){ return s.id === activePunchStoreId; });
+    apiCall('punch', {
+      empId:      currentUser.id,
+      empName:    currentUser.name,
+      storeId:    activePunchStoreId || currentUser.storeId,
+      storeName:  store ? store.name : currentUser.storeName,
+      type:       type,
+      rawTime:    raw,
+      calcTime:   calc,
+      gpsDistance: 0,
+      inRange:    gpsOk
+    });
+  }
+}
+
+// ── Today Records ─────────────────────────────────────
+const initRecords = [
+  { type:'IN1', time:'09:00', raw:'09:03', store:'大安門市', tag:'' },
+];
+
+function renderTodayRecords() {
+  const container = document.getElementById('today-records');
+  if(!container) return;
+  const records = [...initRecords];
+  const typeMap = { in1:'IN1', out1:'OUT1', in2:'IN2', out2:'OUT2' };
+  const rawMap = { in1:'09:03', out1:'14:02', in2:'15:05', out2:'18:33' };
+  for(const [k,v] of Object.entries(punchState)) {
+    if(v) records.push({ type:typeMap[k], time:v, raw:rawMap[k]||v, store:'大安門市', tag:'' });
+  }
+  // Remove duplicates (init IN1 already added)
+  const seen = new Set();
+  const unique = records.filter(r => { if(seen.has(r.type)) return false; seen.add(r.type); return true; });
+
+  if(unique.length===0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:24px;font-size:14px;">今日尚無打卡紀錄</div>';
+    return;
+  }
+  container.innerHTML = unique.map(r => {
+    const isIn = r.type.startsWith('IN');
+    const tagHtml = r.tag ? `<span class="record-tag ${r.tag}">${r.tag==='patch'?'補卡':r.tag==='support'?'支援':r.tag}</span>` : '';
+    return `
+      <div class="record-item">
+        <div class="record-type ${isIn?'in':'out'}">${r.type}</div>
+        <div class="record-info">
+          <div class="record-time">${r.time}</div>
+          <div class="record-raw">原始：${r.raw}</div>
+          <div class="record-store">📍 ${r.store}</div>
+        </div>
+        ${tagHtml}
+      </div>`;
+  }).join('');
+}
+renderTodayRecords();
+
+// ── Daily Detail (Employee month page) ────────────────
+function renderDailyDetail() {
+  const tbody = document.getElementById('daily-detail');
+  if(!tbody) return;
+  tbody.innerHTML = DAILY_RECORDS.map(r => {
+    const noteHtml = r.note ? `<span style="font-size:11px;color:var(--warning);font-weight:700;">(${r.note})</span>` : '';
+    return `<tr>
+      <td>${r.date} ${noteHtml}</td>
+      <td>${r.in1||'-'}</td>
+      <td>${r.out1||r.out2||'-'}</td>
+      <td style="font-weight:700;">${r.hours>0?r.hours+'h':'-'}</td>
+    </tr>`;
+  }).join('');
+}
+renderDailyDetail();
+
+// ── Employee List (Manager overview) ──────────────────
+
+// ── 異常紀錄整合在總覽頁 ──────────────────────────────
+const ANOMALIES_DATA = [
+  {type:'danger', title:'🔴 漏卡－陳小明',    sub:'3/27 下班未打卡（OUT1 遺漏）',          time:'大安門市・3月27日', canPatch:true, empName:'陳小明', pType:'OUT1'},
+  {type:'warning',title:'⚠️ 遲到－王大華',    sub:'3/27 主管確認遲到 18 分鐘',             time:'大安門市・3月27日', canPatch:false},
+  {type:'danger', title:'🔴 超距離打卡－林美玲',sub:'3/26 打卡時距門市 520 公尺（限 300 公尺）',time:'大安門市・3月26日', canPatch:false},
+  {type:'info',   title:'🔵 補卡紀錄－張志明', sub:'3/25 IN1 由李主管補登（手機故障）',      time:'大安門市・3月25日', canPatch:false},
+  {type:'warning',title:'⚠️ 跨店支援打卡－陳小明',sub:'3/24 在信義門市打卡（非所屬門市）',  time:'信義門市・3月24日', canPatch:false},
+];
+
+function renderOverviewAnomalies() {
+  const c = document.getElementById('overview-anomaly-list'); if(!c) return;
+  const badge = document.getElementById('overview-anom-badge');
+  const count = ANOMALIES_DATA.filter(a=>a.type!=='info').length;
+  if(badge){ badge.textContent=count; badge.style.display=count>0?'inline':'none'; }
+
+  if(ANOMALIES_DATA.length===0){
+    c.innerHTML='<div style="text-align:center;color:var(--gray-400);padding:16px;font-size:13px">✅ 本月無異常紀錄</div>';
+    return;
+  }
+  c.innerHTML = ANOMALIES_DATA.map(a=>{
+    const colors = {
+      danger:  {bg:'var(--danger-light)', border:'var(--danger)'},
+      warning: {bg:'var(--warning-light)',border:'var(--warning)'},
+      info:    {bg:'var(--primary-light)',border:'var(--primary)'},
+    };
+    const col = colors[a.type]||colors.info;
+    return `<div style="padding:12px 14px;border-radius:10px;margin:0 16px 8px;
+      border-left:4px solid ${col.border};background:${col.bg}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--gray-900)">${a.title}</div>
+          <div style="font-size:12px;color:var(--gray-600);margin-top:3px">${a.sub}</div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:3px">${a.time}</div>
+        </div>
+        ${a.canPatch
+          ? `<button onclick="openPatchModal('${a.empName||''}','${a.pType||''}')"
+              style="flex-shrink:0;background:var(--danger);color:#fff;border:none;
+              padding:6px 11px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">補卡</button>`
+          : a.type!=='info'
+            ? `<button onclick="showToast('已確認處理','success')"
+                style="flex-shrink:0;background:${col.border};color:#fff;border:none;
+                padding:6px 11px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">確認</button>`
+            : ''
+        }
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderEmpList(storeName='大安門市') {
+  const container = document.getElementById('emp-list-today');
+  if(!container) return;
+  const filtered = TODAY_EMP_STATUS;
+  const statusLabel = { ok:'在班', late:'遲到', absent:'未到', off:'休假', support:'支援中' };
+  container.innerHTML = filtered.map(e => {
+    const initials = e.name.charAt(0);
+    const punchInfo = e.in1 && e.in1!=='休' ? `IN1 ${e.in1}${e.out1?' → OUT1 '+e.out1:''}` : e.in1==='休' ? '今日休假' : '尚未打卡';
+    return `<div class="emp-item">
+      <div class="emp-avatar">${initials}</div>
+      <div style="flex:1;">
+        <div class="emp-name">${e.name} ${e.support?'<span style="font-size:11px;color:#0284c7;font-weight:700;">支援</span>':''}</div>
+        <div class="emp-meta">${punchInfo}</div>
+        <div class="emp-meta">📍 ${e.store}</div>
+      </div>
+      <div class="emp-status ${e.status}">${statusLabel[e.status]}</div>
+    </div>`;
+  }).join('');
+}
+renderEmpList();
+
+// ── Month Stats Table ──────────────────────────────────
+function renderMonthTable() {
+  const base = parseInt(document.getElementById('base-hours')?.value || 176);
+  const tbody = document.getElementById('month-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = MONTH_DATA.map(e => {
+    const ot = Math.max(0, e.hours - base);
+    const statusClass = e.hours >= base ? 'badge-ok' : e.anomaly > 3 ? 'badge-warn' : '';
+    const statusText = e.hours >= base ? '✅ 達標' : '⚠️ 不足';
+    return `<tr>
+      <td style="font-weight:700;text-align:left;">${e.emp}</td>
+      <td class="${e.hours>=base?'badge-ok':'badge-warn'}">${e.hours}</td>
+      <td class="${ot>0?'badge-ot':''}">${ot>0?'+'+ot:'-'}</td>
+      <td class="${e.late>0?'badge-warn':''}">${e.late}</td>
+      <td class="${e.miss>0?'badge-warn':''}">${e.miss}</td>
+      <td class="${statusClass}">${statusText}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderStoreRank() {
+  const container = document.getElementById('store-rank');
+  if(!container) return;
+  const stores = [
+    { name:'大安門市', avg:162, count:4 },
+    { name:'信義門市', avg:148, count:2 },
+    { name:'中山門市', avg:160, count:1 },
+  ];
+  const max = Math.max(...stores.map(s=>s.avg));
+  container.innerHTML = stores.map(s => `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+        <span style="font-weight:700;">${s.name}</span>
+        <span style="color:var(--primary);font-weight:700;">${s.avg} hr 平均</span>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar ${s.avg>176?'over':''}" style="width:${(s.avg/max*100).toFixed(0)}%"></div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Store Cards (settings page summary) ───────────────
+function renderStoreCards() {
+  const container = document.getElementById('store-cards-list');
+  if(!container) return;
+  container.innerHTML = STORES.map(s => `
+    <div style="background:var(--white);border:1px solid var(--gray-200);border-radius:12px;padding:14px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:16px;font-weight:800;">🏪 ${s.name}</div>
+        <div style="font-size:12px;font-weight:700;padding:3px 9px;border-radius:99px;
+          background:${s.active?'var(--success-light)':'var(--gray-100)'};
+          color:${s.active?'var(--success)':'var(--gray-400)'};">
+          ${s.active?'● 啟用':'○ 停用'}
+        </div>
+      </div>
+      <div class="info-row"><span class="info-key">GPS 緯度</span><span class="info-val">${s.lat}</span></div>
+      <div class="info-row"><span class="info-key">GPS 經度</span><span class="info-val">${s.lng}</span></div>
+      <div class="info-row"><span class="info-key">允許範圍</span><span class="info-val">${s.radius} 公尺</span></div>
+    </div>`).join('') +
+  `<button onclick="showStoreSettings()" style="
+    width:100%;padding:13px;background:var(--primary-light);color:var(--primary);
+    border:2px dashed var(--primary);border-radius:12px;
+    font-size:15px;font-weight:800;cursor:pointer;">
+    ＋ 新增 / 管理門市
+  </button>`;
+}
+renderStoreCards();
+
+// ── Page Navigation ───────────────────────────────────
+function showPage(pageId, navGroup, navIndex) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(pageId).classList.add('active');
+  currentPage = pageId;
+
+  // Update nav active state
+  const btns = document.querySelectorAll('.nav-btn');
+  btns.forEach(b => b.classList.remove('active'));
+  if(navGroup==='nav-employee') document.getElementById(`nav-e-${navIndex}`)?.classList.add('active');
+  if(navGroup==='nav-manager') document.getElementById(`nav-m-${navIndex}`)?.classList.add('active');
+
+  // Re-render dynamic content
+  if(pageId==='page-month') { renderMonthTable(); renderStoreRank(); }
+  if(pageId==='page-settings') renderStoreCards();
+  if(pageId==='page-mymonth') renderDailyDetail();
+  if(pageId==='page-overview'){renderEmpList();renderOverviewAnomalies();}
+}
+
+function goBack() {
+  if(currentRole==='manager') showPage('page-anomaly','nav-manager',1);
+  else showPage('page-clock','nav-employee',0);
+}
+
+// ── Role Switch ───────────────────────────────────────
+function switchRole() {
+  if(currentRole==='employee') {
+    currentRole='manager';
+    buildManagerNav();
+    showPage('page-overview','mgr',0);
+    showToast('已切換至主管端','success');
+  } else {
+    currentRole='employee';
+    document.getElementById('main-nav').innerHTML=buildEmpNavHTML();
+    showPage('page-clock','emp',0);
+    showToast('已切換至員工端','');
+  }
+}
+
+// ── Store Selector (Manager) ──────────────────────────
+function selectStore(el, name) {
+  document.querySelectorAll('.store-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderEmpList(name);
+  showToast(`已切換至 ${name}`,'');
+}
+
+// ── Patch Modal (quick) ───────────────────────────────
+function showPatchModal(emp, type, date) {
+  const overlay = document.getElementById('patch-modal-overlay');
+  overlay.classList.add('open');
+  const qemp = document.getElementById('quick-emp');
+  const qtype = document.getElementById('quick-type');
+  if(emp) for(let o of qemp.options) if(o.text===emp) { qemp.value=o.value; break; }
+  if(type) for(let o of qtype.options) if(o.value===type||o.text===type) { qtype.value=o.value; break; }
+}
+
+function closePatchModal(e) {
+  if(!e || e.target===document.getElementById('patch-modal-overlay'))
+    document.getElementById('patch-modal-overlay').classList.remove('open');
+}
+
+function submitQuickPatch() {
+  document.getElementById('patch-modal-overlay').classList.remove('open');
+  showToast('✅ 補卡已登記','success');
+  // Remove the anomaly item
+  const a = document.getElementById('anom-1');
+  if(a) { a.style.opacity='0.4'; a.style.pointerEvents='none'; }
+}
+
+// ── Patch Page ────────────────────────────────────────
+document.addEventListener('input', function(e) {
+  if(e.target.id==='patch-time') {
+    const val = e.target.value;
+    const [h,m] = val.split(':').map(Number);
+    document.getElementById('patch-raw-time').textContent = val;
+    document.getElementById('patch-calc-time').textContent = roundDown(h,m||0);
+  }
+  if(e.target.id==='base-hours') renderMonthTable();
+});
+
+function submitPatch() {
+  const reason = document.getElementById('patch-reason').value.trim();
+  if(!reason) { showToast('⚠️ 請填寫補卡原因','danger'); return; }
+  showToast('✅ 補卡登記成功','success');
+  document.getElementById('patch-reason').value='';
+}
+
+// ── Store CRUD ────────────────────────────────────────
+function showStoreSettings() {
+  renderStoreSettingsBody();
+  document.getElementById('store-modal').classList.add('open');
+}
+
+function renderStoreSettingsBody() {
+  const body = document.getElementById('store-settings-body');
+  body.innerHTML = `
+    <!-- 新增門市按鈕 -->
+    <button onclick="showAddStoreForm()" style="
+      width:100%;padding:14px;margin-bottom:14px;
+      background:var(--primary);color:#fff;
+      border:none;border-radius:12px;
+      font-size:16px;font-weight:800;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;gap:8px;">
+      ＋ 新增門市
+    </button>
+
+    <!-- 門市列表 -->
+    <div id="store-list-inner">
+      ${STORES.map((s,i) => renderStoreCard(s,i)).join('')}
+    </div>`;
+}
+
+function renderStoreCard(s, i) {
+  return `
+    <div id="store-card-${s.id}" style="border:1px solid var(--gray-200);border-radius:12px;margin-bottom:10px;overflow:hidden;">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--gray-50);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:18px;">🏪</span>
+          <span style="font-size:15px;font-weight:800;">${s.name}</span>
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;
+            background:${s.active?'var(--success-light)':'var(--gray-100)'};
+            color:${s.active?'var(--success)':'var(--gray-400)'};">
+            ${s.active?'啟用':'停用'}
+          </span>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="toggleEditStore('${s.id}')"
+            style="background:var(--primary-light);color:var(--primary);border:none;
+            padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            編輯
+          </button>
+          <button onclick="toggleStoreActive('${s.id}')"
+            style="background:${s.active?'var(--danger-light)':'var(--success-light)'};
+            color:${s.active?'var(--danger)':'var(--success)'};
+            border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            ${s.active?'停用':'啟用'}
+          </button>
+        </div>
+      </div>
+      <!-- Info -->
+      <div style="padding:10px 14px;" id="store-view-${s.id}">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+          <div style="font-size:12px;color:var(--gray-500);">📍 ${s.lat}, ${s.lng}</div>
+          <div style="font-size:12px;color:var(--gray-500);">📏 允許 ${s.radius} 公尺</div>
+        </div>
+      </div>
+      <!-- Edit Form (hidden by default) -->
+      <div style="padding:12px 14px;border-top:1px solid var(--gray-100);display:none;" id="store-edit-${s.id}">
+        <div style="margin-bottom:8px;">
+          <div class="form-label" style="font-size:13px;">門市名稱</div>
+          <input class="form-input" id="edit-name-${s.id}" value="${s.name}" style="padding:10px 12px;font-size:15px;">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <div class="form-label" style="font-size:13px;">GPS 緯度</div>
+            <input class="form-input" id="edit-lat-${s.id}" value="${s.lat}" style="padding:10px 12px;font-size:14px;" placeholder="25.0268">
+          </div>
+          <div>
+            <div class="form-label" style="font-size:13px;">GPS 經度</div>
+            <input class="form-input" id="edit-lng-${s.id}" value="${s.lng}" style="padding:10px 12px;font-size:14px;" placeholder="121.5437">
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div class="form-label" style="font-size:13px;">允許打卡範圍（公尺）</div>
+          <input class="form-input" id="edit-radius-${s.id}" value="${s.radius}" type="number" style="padding:10px 12px;font-size:15px;">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="saveStoreEdit('${s.id}')"
+            style="flex:1;padding:12px;background:var(--success);color:#fff;border:none;
+            border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;">
+            ✅ 儲存
+          </button>
+          <button onclick="toggleEditStore('${s.id}')"
+            style="padding:12px 16px;background:var(--gray-100);color:var(--gray-700);border:none;
+            border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">
+            取消
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleEditStore(id) {
+  const view = document.getElementById(`store-view-${id}`);
+  const edit = document.getElementById(`store-edit-${id}`);
+  const isEditing = edit.style.display !== 'none';
+  edit.style.display = isEditing ? 'none' : 'block';
+  view.style.display = isEditing ? 'block' : 'none';
+}
+
+function saveStoreEdit(id) {
+  const s = STORES.find(x => x.id === id);
+  if (!s) return;
+  const name = document.getElementById(`edit-name-${id}`).value.trim();
+  const lat  = parseFloat(document.getElementById(`edit-lat-${id}`).value);
+  const lng  = parseFloat(document.getElementById(`edit-lng-${id}`).value);
+  const radius = parseInt(document.getElementById(`edit-radius-${id}`).value);
+  if (!name) { showToast('⚠️ 請填寫門市名稱', 'danger'); return; }
+  if (isNaN(lat) || isNaN(lng)) { showToast('⚠️ GPS 座標格式有誤', 'danger'); return; }
+  if (isNaN(radius) || radius < 50) { showToast('⚠️ 範圍至少 50 公尺', 'danger'); return; }
+  s.name = name; s.lat = lat; s.lng = lng; s.radius = radius;
+  renderStoreSettingsBody();
+  renderStoreCards();
+  refreshStoreTabs();
+  showToast(`✅ ${name} 已儲存`, 'success');
+}
+
+function toggleStoreActive(id) {
+  const s = STORES.find(x => x.id === id);
+  if (!s) return;
+  s.active = !s.active;
+  renderStoreSettingsBody();
+  renderStoreCards();
+  refreshStoreTabs();
+  showToast(`${s.name} 已${s.active?'啟用':'停用'}`, s.active?'success':'');
+}
+
+// ── Add Store Form ─────────────────────────────────────
+function showAddStoreForm() {
+  // Inject inline form at top of list
+  const inner = document.getElementById('store-list-inner');
+  // Prevent duplicate
+  if (document.getElementById('new-store-form')) return;
+  const formHtml = `
+    <div id="new-store-form" style="border:2px solid var(--primary);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--primary-light);">
+      <div style="font-size:15px;font-weight:800;color:var(--primary);margin-bottom:12px;">🏪 新增門市</div>
+      <div style="margin-bottom:8px;">
+        <div class="form-label" style="font-size:13px;">門市名稱 <span style="color:var(--danger);">*</span></div>
+        <input class="form-input" id="new-store-name" placeholder="例：松山門市" style="padding:11px 12px;font-size:15px;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div>
+          <div class="form-label" style="font-size:13px;">GPS 緯度 <span style="color:var(--danger);">*</span></div>
+          <input class="form-input" id="new-store-lat" placeholder="25.0478" style="padding:10px 12px;font-size:14px;">
+        </div>
+        <div>
+          <div class="form-label" style="font-size:13px;">GPS 經度 <span style="color:var(--danger);">*</span></div>
+          <input class="form-input" id="new-store-lng" placeholder="121.5319" style="padding:10px 12px;font-size:14px;">
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div class="form-label" style="font-size:13px;">打卡允許範圍（公尺）</div>
+        <input class="form-input" id="new-store-radius" type="number" value="300" style="padding:10px 12px;font-size:15px;">
+      </div>
+      <div style="font-size:12px;color:var(--primary);background:#fff;border-radius:8px;padding:8px 10px;margin-bottom:12px;">
+        💡 小提示：可至 Google Maps 點選門市位置，右鍵複製座標貼入
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="confirmAddStore()"
+          style="flex:1;padding:13px;background:var(--primary);color:#fff;border:none;
+          border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;">
+          ＋ 確認新增
+        </button>
+        <button onclick="cancelAddStore()"
+          style="padding:13px 16px;background:var(--white);color:var(--gray-700);
+          border:1px solid var(--gray-200);border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">
+          取消
+        </button>
+      </div>
+    </div>`;
+  inner.insertAdjacentHTML('afterbegin', formHtml);
+  document.getElementById('new-store-name').focus();
+}
+
+function cancelAddStore() {
+  const f = document.getElementById('new-store-form');
+  if (f) f.remove();
+}
+
+function confirmAddStore() {
+  const name   = document.getElementById('new-store-name').value.trim();
+  const lat    = parseFloat(document.getElementById('new-store-lat').value);
+  const lng    = parseFloat(document.getElementById('new-store-lng').value);
+  const radius = parseInt(document.getElementById('new-store-radius').value) || 300;
+
+  if (!name)         { showToast('⚠️ 請填寫門市名稱','danger'); return; }
+  if (isNaN(lat)||isNaN(lng)) { showToast('⚠️ GPS 座標格式有誤','danger'); return; }
+  if (STORES.find(s => s.name === name)) { showToast('⚠️ 此門市名稱已存在','danger'); return; }
+
+  const newId = 's' + Date.now();
+  STORES.push({ id: newId, name, lat, lng, radius, active: true });
+
+  renderStoreSettingsBody();
+  renderStoreCards();
+  refreshStoreTabs();
+  showToast(`✅ ${name} 已新增`, 'success');
+}
+
+// ── Refresh store tabs in manager overview ─────────────
+function refreshStoreTabs() {
+  const tabsEl = document.querySelector('.store-tabs');
+  if (!tabsEl) return;
+  tabsEl.innerHTML = STORES.filter(s => s.active).map((s, i) =>
+    `<div class="store-tab ${i===0?'active':''}" onclick="selectStore(this,'${s.name}')">${s.name}</div>`
+  ).join('');
+}
+
+function showEmpSettings() {
+  const body = document.getElementById('emp-settings-body');
+  body.innerHTML = EMPLOYEES.map(e => `
+    <div style="display:flex;align-items:center;padding:12px 0;border-bottom:1px solid var(--gray-100);gap:12px;">
+      <div style="width:40px;height:40px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--primary);font-size:16px;">${e.name.charAt(0)}</div>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:700;">${e.name}</div>
+        <div style="font-size:12px;color:var(--gray-500);">${e.code}・${e.role==='manager'?'👑 主管':'員工'}・${STORES.find(s=>s.id===e.store)?.name||''}</div>
+      </div>
+      <div style="font-size:12px;color:${e.active?'var(--success)':'var(--gray-400)'};font-weight:700;">${e.active?'在職':'離職'}</div>
+    </div>`).join('');
+  document.getElementById('emp-modal').classList.add('open');
+}
+
+function closeModal(id, e) {
+  if(!e || e.target===document.getElementById(id))
+    document.getElementById(id).classList.remove('open');
+}
+
+// ── Toast ─────────────────────────────────────────────
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+
+// ══════════════════════════════════════════════════════
+// DAILY ATTENDANCE REVIEW (主管今日出勤確認)
+// ══════════════════════════════════════════════════════
+// Attendance data: raw = actual tap time (used for late check by manager)
+//                 calc = rounded down to half-hour (used for hour calculation)
+const REVIEW_DATA = {
+  's1': [
+    { id:'e1', name:'陳小明',
+      in1Raw:'09:03', in1Calc:'09:00', out1Raw:'14:02', out1Calc:'14:00',
+      in2Raw:'15:05', in2Calc:'15:00', out2Raw:'18:33', out2Calc:'18:30',
+      totalHours:8.5, lateConfirmed:false, lateNote:'' },
+    { id:'e2', name:'王大華',
+      in1Raw:'09:18', in1Calc:'09:00', out1Raw:'14:00', out1Calc:'14:00',
+      in2Raw:'15:00', in2Calc:'15:00', out2Raw:'18:30', out2Calc:'18:30',
+      totalHours:8.5, lateConfirmed:false, lateNote:'' },
+    { id:'e3', name:'林美玲',
+      in1Raw:'08:28', in1Calc:'08:00', out1Raw:'', out1Calc:'',
+      in2Raw:'', in2Calc:'', out2Raw:'', out2Calc:'',
+      totalHours:0, lateConfirmed:false, lateNote:'' },
+    { id:'e4', name:'張志明',
+      in1Raw:'09:00', in1Calc:'09:00', out1Raw:'13:30', out1Calc:'13:30',
+      in2Raw:'14:00', in2Calc:'14:00', out2Raw:'17:35', out2Calc:'17:30',
+      totalHours:8.0, lateConfirmed:false, lateNote:'' },
+    { id:'e7', name:'吳雅婷',
+      in1Raw:'', in1Calc:'', out1Raw:'', out1Calc:'',
+      in2Raw:'', in2Calc:'', out2Raw:'', out2Calc:'',
+      totalHours:0, status:'off', lateConfirmed:false, lateNote:'' },
+  ],
+  's2': [
+    { id:'e5', name:'黃淑芬',
+      in1Raw:'10:45', in1Calc:'10:30', out1Raw:'15:00', out1Calc:'15:00',
+      in2Raw:'', in2Calc:'', out2Raw:'', out2Calc:'',
+      totalHours:4.5, lateConfirmed:false, lateNote:'' },
+    { id:'e6', name:'劉建國',
+      in1Raw:'', in1Calc:'', out1Raw:'', out1Calc:'',
+      in2Raw:'', in2Calc:'', out2Raw:'', out2Calc:'',
+      totalHours:0, status:'absent', lateConfirmed:false, lateNote:'' },
+  ],
+  's3': [
+    { id:'e8', name:'周嘉豪',
+      in1Raw:'09:02', in1Calc:'09:00', out1Raw:'15:00', out1Calc:'15:00',
+      in2Raw:'', in2Calc:'', out2Raw:'', out2Calc:'',
+      totalHours:6.0, lateConfirmed:false, lateNote:'' },
+  ]
+};
+
+let reviewCurrentStore = 's1';
+let reviewSubmitted = false;
+
+function renderDailyReview() {
+  const now = new Date();
+  const sub = document.getElementById('review-date-sub');
+  if (sub) sub.textContent = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日・主管每日必做';
+
+  // Store tabs
+  const tabs = document.getElementById('review-store-tabs');
+  if (tabs) {
+    tabs.innerHTML = STORES.filter(s => s.active).map(s =>
+      `<div class="store-tab ${s.id===reviewCurrentStore?'active':''}"
+        onclick="reviewCurrentStore='${s.id}';renderDailyReview()">
+        ${s.name}
+      </div>`
+    ).join('');
+  }
+
+  // Reset submit btn if not submitted
+  const btn = document.getElementById('review-submit-btn');
+  if (btn && !reviewSubmitted) {
+    btn.textContent = '完成確認';
+    btn.style.background = 'var(--success)';
+  }
+
+  renderReviewList();
+}
+
+function renderReviewList() {
+  const container = document.getElementById('review-emp-list');
+  if (!container) return;
+  const list = REVIEW_DATA[reviewCurrentStore] || [];
+
+  // Summary
+  const lateCount   = list.filter(e => e.lateConfirmed).length;
+  const absentCount = list.filter(e => e.status === 'absent').length;
+  const badge = document.getElementById('review-summary-badge');
+  if (badge) badge.textContent = `主管已確認遲到 ${lateCount} 人 ／ 未到 ${absentCount} 人`;
+
+  container.innerHTML = list.map(emp => {
+    const isOff    = emp.status === 'off';
+    const isAbsent = emp.status === 'absent';
+    const hasIn    = !!emp.in1Raw;
+
+    // Build punch detail rows
+    const punches = [];
+    if (emp.in1Raw)  punches.push({ label:'IN1',  raw:emp.in1Raw,  calc:emp.in1Calc,  isIn:true  });
+    if (emp.out1Raw) punches.push({ label:'OUT1', raw:emp.out1Raw, calc:emp.out1Calc, isIn:false });
+    if (emp.in2Raw)  punches.push({ label:'IN2',  raw:emp.in2Raw,  calc:emp.in2Calc,  isIn:true  });
+    if (emp.out2Raw) punches.push({ label:'OUT2', raw:emp.out2Raw, calc:emp.out2Calc, isIn:false });
+
+    const punchHtml = punches.length > 0
+      ? `<div style="margin-top:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px;">
+          ${punches.map(p => `
+            <div style="background:var(--gray-50);border-radius:8px;padding:8px 10px;border:1px solid var(--gray-100);">
+              <div style="font-size:11px;font-weight:700;color:${p.isIn?'var(--success)':'var(--primary)'};">${p.label}</div>
+              <div style="font-size:16px;font-weight:800;color:var(--gray-900);font-variant-numeric:tabular-nums;">${p.calc}</div>
+              <div style="font-size:11px;color:var(--gray-400);">原始打卡 ${p.raw}</div>
+            </div>`).join('')}
+        </div>`
+      : `<div style="margin-top:8px;font-size:13px;color:var(--gray-400);padding:8px 0;">
+          ${isOff ? '📅 今日休假' : isAbsent ? '❌ 未到班，無打卡紀錄' : '尚無打卡紀錄'}
+        </div>`;
+
+    const hoursHtml = emp.totalHours > 0
+      ? `<span style="font-size:12px;font-weight:700;color:var(--primary);background:var(--primary-light);
+          padding:2px 8px;border-radius:99px;">工時 ${emp.totalHours}h</span>`
+      : '';
+
+    // Late confirmation checkbox — only show if employee has punched in
+    const lateHtml = hasIn && !isOff && !isAbsent ? `
+      <div style="margin-top:10px;padding:12px;
+        background:${emp.lateConfirmed ? 'var(--danger-light)' : 'var(--gray-50)'};
+        border-radius:10px;border:1px solid ${emp.lateConfirmed ? '#fca5a5' : 'var(--gray-200)'};
+        display:flex;align-items:flex-start;gap:12px;cursor:pointer;"
+        onclick="toggleLateConfirm('${emp.id}','${reviewCurrentStore}')">
+        <!-- Checkbox -->
+        <div style="width:24px;height:24px;border-radius:6px;flex-shrink:0;margin-top:1px;
+          border:2px solid ${emp.lateConfirmed ? 'var(--danger)' : 'var(--gray-300)'};
+          background:${emp.lateConfirmed ? 'var(--danger)' : '#fff'};
+          display:flex;align-items:center;justify-content:center;">
+          ${emp.lateConfirmed ? '<span style="color:#fff;font-size:15px;font-weight:900;line-height:1;">✓</span>' : ''}
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:700;color:${emp.lateConfirmed ? 'var(--danger)' : 'var(--gray-600)'};">
+            ${emp.lateConfirmed ? '⛔ 已確認：此員工今日遲到' : '此員工今日有遲到？打勾確認'}
+          </div>
+          ${emp.lateConfirmed
+            ? `<div style="margin-top:6px;">
+                <input id="late-note-${emp.id}" type="text" value="${emp.lateNote}"
+                  placeholder="備註（選填，例：遲到 18 分鐘）"
+                  onclick="event.stopPropagation()"
+                  oninput="REVIEW_DATA['${reviewCurrentStore}'].find(e=>e.id==='${emp.id}').lateNote=this.value"
+                  style="width:100%;padding:7px 10px;border:1px solid #fca5a5;border-radius:8px;
+                  font-size:13px;background:#fff;font-family:inherit;">
+              </div>`
+            : '<div style="font-size:12px;color:var(--gray-400);margin-top:2px;">主管確認後計入月遲到紀錄</div>'
+          }
+        </div>
+      </div>` : '';
+
+    // Card border color
+    let borderStyle = '1px solid var(--gray-200)';
+    let borderLeft  = '';
+    if (emp.lateConfirmed) { borderStyle = '1px solid #fca5a5'; borderLeft = 'border-left:4px solid var(--danger);'; }
+    else if (isAbsent)     { borderLeft = 'border-left:4px solid var(--gray-300);'; }
+
+    return `
+      <div style="background:var(--white);border:${borderStyle};${borderLeft}
+        border-radius:12px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:var(--primary-light);
+              display:flex;align-items:center;justify-content:center;
+              font-size:17px;font-weight:800;color:var(--primary);flex-shrink:0;">${emp.name.charAt(0)}</div>
+            <div>
+              <div style="font-size:16px;font-weight:800;">${emp.name}</div>
+              <div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap;">
+                ${hoursHtml}
+                ${emp.lateConfirmed
+                  ? '<span style="font-size:12px;font-weight:700;color:var(--danger);background:var(--danger-light);padding:2px 8px;border-radius:99px;">⛔ 遲到</span>'
+                  : isAbsent
+                    ? '<span style="font-size:12px;font-weight:700;color:var(--gray-500);background:var(--gray-100);padding:2px 8px;border-radius:99px;">未到班</span>'
+                    : isOff
+                      ? '<span style="font-size:12px;font-weight:700;color:var(--gray-400);background:var(--gray-100);padding:2px 8px;border-radius:99px;">休假</span>'
+                      : hasIn
+                        ? '<span style="font-size:12px;font-weight:700;color:var(--success);background:var(--success-light);padding:2px 8px;border-radius:99px;">已打卡</span>'
+                        : ''
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+        ${punchHtml}
+        ${lateHtml}
+      </div>`;
+  }).join('');
+}
+
+function toggleLateConfirm(empId, storeId) {
+  const list = REVIEW_DATA[storeId] || [];
+  const emp  = list.find(e => e.id === empId);
+  if (emp) { emp.lateConfirmed = !emp.lateConfirmed; if (!emp.lateConfirmed) emp.lateNote = ''; }
+  renderReviewList();
+}
+
+function submitDailyReview() {
+  const list = REVIEW_DATA[reviewCurrentStore] || [];
+  reviewSubmitted = true;
+  const lateCount = list.filter(e => e.lateConfirmed).length;
+  const btn = document.getElementById('review-submit-btn');
+  if (btn) { btn.textContent = '已完成 ✓'; btn.style.background = 'var(--gray-400)'; }
+  showToast(`✅ 出勤確認完成，遲到 ${lateCount} 人已記錄`, 'success');
+}
+
+// ══════════════════════════════════════════════════════
+// LEAVE SYSTEM
+// ══════════════════════════════════════════════════════
+const LEAVE_TYPES = [
+  { id:'sick',      name:'病假',       icon:'🤒', max:30,  needDoc:true,  docNote:'就醫需附診斷證明（視公司規定）',    rule:'每年 30 小時，薪資半薪' },
+  { id:'period',    name:'生理假',     icon:'🩸', max:24,  needDoc:false, docNote:'',                               rule:'每月 1 天（8小時），不扣薪' },
+  { id:'personal',  name:'事假',       icon:'📝', max:56,  needDoc:false, docNote:'',                               rule:'每年 56 小時，不支薪' },
+  { id:'annual',    name:'特休',       icon:'🌴', max:null,needDoc:false, docNote:'',                               rule:'依年資計算，支薪' },
+  { id:'wedding',   name:'婚假',       icon:'💍', max:64,  needDoc:true,  docNote:'需附結婚證書',                    rule:'8 天（64小時），支薪' },
+  { id:'maternity', name:'產假',       icon:'🍼', max:480, needDoc:true,  docNote:'需附出生醫學證明',                rule:'8 週（依法），支薪' },
+  { id:'prenatal',  name:'產檢假',     icon:'🏥', max:40,  needDoc:true,  docNote:'需附產檢紀錄',                   rule:'5 次各 8 小時，支薪' },
+  { id:'paternity', name:'陪產假',     icon:'👨‍👩‍👦', max:40,  needDoc:true,  docNote:'需附出生醫學證明',                rule:'5 天（40小時），支薪' },
+  { id:'family',    name:'家庭照顧假', icon:'🏠', max:40,  needDoc:false, docNote:'',                               rule:'每年 40 小時，不支薪' },
+  { id:'injury',    name:'工傷病假',   icon:'🩹', max:null,needDoc:true,  docNote:'需附職災相關文件',                rule:'依法全薪' },
+  { id:'official',  name:'公假',       icon:'🏛️', max:null,needDoc:true,  docNote:'需附公務單位公文',                rule:'支薪，視公務需要' },
+  { id:'funeral',   name:'喪假',       icon:'🖤', max:null,needDoc:true,  docNote:'需附死亡證明或訃聞',              rule:'依親屬關係 3–8 天，支薪' },
+];
+
+let selectedLeaveType = null;
+
+let LEAVE_APPS = [
+  { id:'la1', emp:'陳小明', type:'sick',     date:'2025-03-20', start:'09:00', end:'18:00', hours:9,   reason:'感冒發燒',   status:'approved', reviewNote:'',           reviewBy:'李主管', reviewAt:'2025-03-19' },
+  { id:'la2', emp:'王大華', type:'personal', date:'2025-03-25', start:'13:00', end:'18:00', hours:5,   reason:'家中有事',   status:'pending',  reviewNote:'',           reviewBy:'',       reviewAt:'' },
+  { id:'la3', emp:'林美玲', type:'period',   date:'2025-03-28', start:'09:00', end:'17:00', hours:8,   reason:'',           status:'pending',  reviewNote:'',           reviewBy:'',       reviewAt:'' },
+  { id:'la4', emp:'張志明', type:'annual',   date:'2025-04-01', start:'09:00', end:'18:00', hours:9,   reason:'出遊',       status:'rejected', reviewNote:'人力不足，請改期', reviewBy:'李主管', reviewAt:'2025-03-26' },
+  { id:'la5', emp:'陳小明', type:'family',   date:'2025-04-05', start:'09:00', end:'18:00', hours:9,   reason:'照顧家人',   status:'pending',  reviewNote:'',           reviewBy:'',       reviewAt:'' },
+];
+
+function renderLeaveApplyPage() {
+  const grid = document.getElementById('leave-type-grid');
+  if (!grid) return;
+  grid.innerHTML = LEAVE_TYPES.map(t => `
+    <button onclick="selectLeaveType('${t.id}')"
+      style="padding:12px 8px;border-radius:10px;
+        border:2px solid ${selectedLeaveType===t.id ? 'var(--primary)' : 'var(--gray-200)'};
+        background:${selectedLeaveType===t.id ? 'var(--primary-light)' : 'var(--white)'};
+        cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:all .15s;">
+      <span style="font-size:22px;">${t.icon}</span>
+      <span style="font-size:13px;font-weight:700;
+        color:${selectedLeaveType===t.id ? 'var(--primary)' : 'var(--gray-700)'};">${t.name}</span>
+    </button>`).join('');
+  renderMyLeaveList();
+  calcLeaveHours();
+}
+
+function selectLeaveType(id) {
+  selectedLeaveType = id;
+  const t = LEAVE_TYPES.find(x => x.id === id);
+  if (!t) return;
+  renderLeaveApplyPage();
+
+  // Banner
+  const banner = document.getElementById('leave-type-banner');
+  if (banner) {
+    banner.style.display = 'block';
+    document.getElementById('leave-banner-name').textContent = t.icon + ' ' + t.name;
+    document.getElementById('leave-banner-rule').textContent =
+      t.rule + (t.max ? `・本年度上限 ${t.max} 小時` : '');
+  }
+  // Doc notice
+  const notice = document.getElementById('leave-doc-notice');
+  if (notice) {
+    notice.style.display = t.needDoc ? 'block' : 'none';
+    document.getElementById('leave-doc-text').textContent = t.docNote;
+  }
+}
+
+function calcLeaveHours() {
+  const s = document.getElementById('leave-start')?.value;
+  const e = document.getElementById('leave-end')?.value;
+  const disp = document.getElementById('leave-hours-display');
+  const warn = document.getElementById('leave-hours-warn');
+  if (!s || !e || !disp) return;
+  const [sh, sm] = s.split(':').map(Number);
+  const [eh, em] = e.split(':').map(Number);
+  const diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff <= 0) {
+    disp.textContent = '0 小時';
+    if (warn) { warn.style.display = 'block'; warn.textContent = '⚠️ 結束時間必須晚於開始時間'; }
+    return;
+  }
+  if (warn) warn.style.display = 'none';
+  disp.textContent = (diff / 60).toFixed(1) + ' 小時';
+}
+
+function submitLeaveApply() {
+  if (!selectedLeaveType) { showToast('⚠️ 請先選擇假別', 'danger'); return; }
+  const date   = document.getElementById('leave-date')?.value;
+  const start  = document.getElementById('leave-start')?.value;
+  const end    = document.getElementById('leave-end')?.value;
+  const reason = document.getElementById('leave-reason')?.value || '';
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  const hours = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+  if (hours <= 0) { showToast('⚠️ 時間設定有誤', 'danger'); return; }
+  const t = LEAVE_TYPES.find(x => x.id === selectedLeaveType);
+  LEAVE_APPS.unshift({
+    id: 'la' + Date.now(), emp: '陳小明', type: selectedLeaveType,
+    date, start, end, hours: parseFloat(hours.toFixed(1)),
+    reason, status: 'pending', reviewNote: '', reviewBy: '', reviewAt: ''
+  });
+  selectedLeaveType = null;
+  const banner = document.getElementById('leave-type-banner');
+  const notice = document.getElementById('leave-doc-notice');
+  if (banner) banner.style.display = 'none';
+  if (notice) notice.style.display = 'none';
+  renderLeaveApplyPage();
+  updateLeavePendingBadge();
+  showToast(`✅ ${t.name}申請已送出，等待主管審核`, 'success');
+}
+
+
+// ── Leave File Upload ──────────────────────────────
+let leaveFileBase64 = null;
+let leaveFileName = null;
+
+function handleLeaveFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showToast('⚠️ 檔案大小不能超過 5MB', 'danger'); return; }
+  leaveFileName = file.name;
+  const box = document.getElementById('leave-upload-box');
+  const mt  = document.getElementById('upload-main-text');
+  const fn  = document.getElementById('leave-file-name');
+  if(box) box.classList.add('has-file');
+  if(mt)  mt.textContent = '✅ 已選擇檔案';
+  if(fn)  { fn.textContent = '📎 ' + file.name; fn.style.display = 'block'; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    leaveFileBase64 = e.target.result;
+    if (file.type.startsWith('image/')) {
+      const prev = document.getElementById('leave-file-preview');
+      if(prev) { prev.src = e.target.result; prev.style.display = 'block'; }
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderMyLeaveList() {
+  const container = document.getElementById('my-leave-list');
+  if (!container) return;
+  const myApps = LEAVE_APPS.filter(a => a.emp === '陳小明').slice(0, 6);
+  if (myApps.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:16px;font-size:14px;">尚無請假紀錄</div>';
+    return;
+  }
+  const stMap = {
+    pending:  { label:'待審核', color:'var(--warning)', bg:'var(--warning-light)' },
+    approved: { label:'已核准', color:'var(--success)', bg:'var(--success-light)' },
+    rejected: { label:'已駁回', color:'var(--danger)',  bg:'var(--danger-light)'  },
+  };
+  container.innerHTML = myApps.map(a => {
+    const t  = LEAVE_TYPES.find(x => x.id === a.type);
+    const st = stMap[a.status];
+    return `
+      <div style="background:var(--white);border:1px solid var(--gray-200);border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+          <div style="font-size:15px;font-weight:800;">${t?.icon||''} ${t?.name||a.type}</div>
+          <div style="padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;background:${st.bg};color:${st.color};">${st.label}</div>
+        </div>
+        <div style="font-size:13px;color:var(--gray-600);">${a.date}・${a.start}～${a.end}・<b>${a.hours}小時</b></div>
+        ${a.reason ? `<div style="font-size:12px;color:var(--gray-400);margin-top:3px;">${a.reason}</div>` : ''}
+        ${a.status==='rejected' && a.reviewNote ? `<div style="font-size:12px;color:var(--danger);margin-top:4px;">駁回原因：${a.reviewNote}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function updateLeavePendingBadge() {
+  const n = LEAVE_APPS.filter(a => a.status === 'pending').length;
+  const el = document.getElementById('leave-pending-badge');
+  if (el) el.textContent = n;
+}
+
+// ── Manager Leave Review ──────────────────────────────
+let leaveTab = 'pending';
+
+function switchLeaveTab(tab) {
+  leaveTab = tab;
+  const p = document.getElementById('ltab-pending');
+  const h = document.getElementById('ltab-history');
+  if (p) { p.style.color = tab==='pending' ? 'var(--primary)' : 'var(--gray-400)'; p.style.borderBottom = tab==='pending' ? '2px solid var(--primary)' : 'none'; }
+  if (h) { h.style.color = tab==='history' ? 'var(--primary)' : 'var(--gray-400)'; h.style.borderBottom = tab==='history' ? '2px solid var(--primary)' : 'none'; }
+  renderLeaveReview(tab);
+}
+
+function renderLeaveReview(tab) {
+  leaveTab = tab || leaveTab;
+  const container = document.getElementById('leave-review-list');
+  if (!container) return;
+  const list = leaveTab === 'pending'
+    ? LEAVE_APPS.filter(a => a.status === 'pending')
+    : LEAVE_APPS.filter(a => a.status !== 'pending');
+  updateLeavePendingBadge();
+
+  if (list.length === 0) {
+    container.innerHTML = `<div style="text-align:center;color:var(--gray-400);padding:32px 16px;font-size:15px;">
+      ${leaveTab==='pending' ? '🎉 目前無待審核假單' : '尚無已處理紀錄'}</div>`;
+    return;
+  }
+  const stMap = {
+    pending:  { label:'待審核', color:'var(--warning)', bg:'var(--warning-light)' },
+    approved: { label:'已核准', color:'var(--success)', bg:'var(--success-light)' },
+    rejected: { label:'已駁回', color:'var(--danger)',  bg:'var(--danger-light)'  },
+  };
+  container.innerHTML = list.map(a => {
+    const t  = LEAVE_TYPES.find(x => x.id === a.type);
+    const st = stMap[a.status];
+    const isPending = a.status === 'pending';
+    return `
+      <div id="leave-card-${a.id}" style="background:var(--white);border:1px solid var(--gray-200);
+        ${isPending ? 'border-left:4px solid var(--warning);' : ''}
+        border-radius:12px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+          <div>
+            <div style="font-size:16px;font-weight:800;">${a.emp}
+              <span style="font-size:14px;font-weight:600;color:var(--gray-500);">${t?.icon||''} ${t?.name||''}</span>
+            </div>
+            <div style="font-size:13px;color:var(--gray-600);margin-top:2px;">${a.date}・${a.start}～${a.end}・<b>${a.hours} 小時</b></div>
+            ${a.reason ? `<div style="font-size:12px;color:var(--gray-500);margin-top:2px;">原因：${a.reason}</div>` : ''}
+          </div>
+          <div style="padding:4px 10px;border-radius:99px;font-size:12px;font-weight:700;
+            background:${st.bg};color:${st.color};white-space:nowrap;">${st.label}</div>
+        </div>
+        ${isPending ? `
+          <div id="reject-box-${a.id}" style="display:none;margin-bottom:8px;">
+            <input class="form-input" id="reject-reason-${a.id}" placeholder="請填寫駁回原因（必填）"
+              style="padding:10px 12px;font-size:14px;border-color:var(--danger);">
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="reviewLeave('${a.id}','approved')"
+              style="flex:1;padding:12px;background:var(--success);color:#fff;border:none;
+              border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">✅ 核准</button>
+            <button onclick="toggleRejectBox('${a.id}')"
+              style="flex:1;padding:12px;background:var(--danger-light);color:var(--danger);
+              border:1px solid var(--danger);border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">❌ 駁回</button>
+          </div>
+          <div id="reject-confirm-${a.id}" style="display:none;margin-top:8px;">
+            <button onclick="reviewLeave('${a.id}','rejected')"
+              style="width:100%;padding:12px;background:var(--danger);color:#fff;border:none;
+              border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">確認駁回並送出</button>
+          </div>` :
+          `<div style="font-size:12px;color:var(--gray-400);margin-top:4px;">
+            ${a.reviewBy ? `由 ${a.reviewBy} 處理・${a.reviewAt}` : ''}
+            ${a.reviewNote ? `・備註：${a.reviewNote}` : ''}
+          </div>`
+        }
+      </div>`;
+  }).join('');
+}
+
+function toggleRejectBox(id) {
+  const box     = document.getElementById('reject-box-' + id);
+  const confirm = document.getElementById('reject-confirm-' + id);
+  const isOpen  = box.style.display !== 'none';
+  box.style.display     = isOpen ? 'none' : 'block';
+  confirm.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) document.getElementById('reject-reason-' + id)?.focus();
+}
+
+function reviewLeave(id, action) {
+  const app = LEAVE_APPS.find(a => a.id === id);
+  if (!app) return;
+  if (action === 'rejected') {
+    const note = document.getElementById('reject-reason-' + id)?.value.trim();
+    if (!note) { showToast('⚠️ 請填寫駁回原因', 'danger'); return; }
+    app.reviewNote = note;
+  }
+  app.status   = action;
+  app.reviewBy = '李主管';
+  app.reviewAt = new Date().toISOString().slice(0, 10);
+  renderLeaveReview(leaveTab);
+  updateLeavePendingBadge();
+  showToast(action === 'approved' ? '✅ 已核准假單' : '❌ 已駁回假單', action === 'approved' ? 'success' : 'danger');
+}
+
+
+// ══════════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════════
+var API_URL = 'https://script.google.com/macros/s/AKfycbxtPtcox7suOB0vhq42WcjY58aQCna1jUrUOdvPvuA7rWqoDgsZf80RZhpusJJf4WaVeg/exec';
+
+// ══════════════════════════════════════════════════
+// SESSION (記住登入)
+// ══════════════════════════════════════════════════
+let currentUser = null;
+
+function saveSession(user) {
+  currentUser = user;
+  try { localStorage.setItem('punch_session', JSON.stringify(user)); } catch(e){}
+}
+function loadSession() {
+  try {
+    const s = localStorage.getItem('punch_session');
+    if (s) { currentUser = JSON.parse(s); return !!currentUser; }
+  } catch(e){}
+  return false;
+}
+function clearSession() {
+  currentUser = null;
+  try { localStorage.removeItem('punch_session'); } catch(e){}
+}
+
+// ══════════════════════════════════════════════════
+// APP INIT
+// ══════════════════════════════════════════════════
+function initApp() {
+  // Restore API URL
+  try {
+    const savedUrl = localStorage.getItem('punch_api_url');
+    if(savedUrl) API_URL = savedUrl;
+  } catch(e){}
+
+  if (loadSession() && currentUser) {
+    // Already logged in - go straight to app
+    document.getElementById('login-page').classList.remove('active');
+    applyUserToUI();
+    if(currentUser.role === 'manager') {
+      currentRole = 'manager';
+      buildManagerNav();
+    }
+    showToast('歡迎回來，' + currentUser.name + '！', 'success');
+  }
+  // else: login page stays visible (it's the default)
+}
+
+// ══════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════
+function doLogin() {
+  var code = (document.getElementById('login-code').value || '').trim().toUpperCase();
+  var errEl = document.getElementById('login-err');
+  errEl.textContent = '';
+  if (!code) { errEl.textContent = '請輸入員工編號'; return; }
+
+  // Try local data
+  var found = null;
+  for (var i = 0; i < EMPLOYEES.length; i++) {
+    if (EMPLOYEES[i].code.toUpperCase() === code && EMPLOYEES[i].active !== false) {
+      found = EMPLOYEES[i];
+      break;
+    }
+  }
+
+  if (!found) { errEl.textContent = '找不到此員工編號，請確認後再試'; return; }
+
+  const store = STORES.find(s => s.id === (found.storeId || found.store));
+  const user = {
+    id: found.id, name: found.name, code: found.code,
+    storeId: found.storeId || found.store,
+    storeName: store ? store.name : '未知門市',
+    role: found.role || 'employee'
+  };
+  saveSession(user);
+  document.getElementById('login-page').classList.remove('active');
+  applyUserToUI();
+
+  if (user.role === 'manager') {
+    currentRole = 'manager';
+    buildManagerNav();
+    showPage('page-overview', 'mgr', 0);
+  } else {
+    currentRole = 'employee';
+  }
+  showToast('歡迎，' + user.name + '！', 'success');
+}
+
+function doLogout() {
+  if (!confirm('確定要登出嗎？')) return;
+  clearSession();
+  currentRole = 'employee';
+  punchState = {in1:null,out1:null,in2:null,out2:null};
+  // Reset to employee nav
+  document.getElementById('main-nav').innerHTML = buildEmpNavHTML();
+  showPage('page-clock','emp',0);
+  // Show login
+  document.getElementById('login-page').classList.add('active');
+  document.getElementById('login-code').value = '';
+  document.getElementById('login-err').textContent = '';
+}
+
+function applyUserToUI() {
+  if (!currentUser) return;
+  var n = currentUser.name;
+  var store = currentUser.storeName;
+  var isManager = currentUser.role === 'manager';
+
+  // Employee banner
+  var bannerName = document.getElementById('emp-banner-name');
+  if(bannerName) bannerName.textContent = '👤 ' + n + '・' + store;
+
+  // Hide/show 切換主管 button based on role
+  var switchBtns = document.querySelectorAll('.role-switch-btn');
+  switchBtns.forEach(function(btn) {
+    if (btn.textContent.indexOf('切換主管') >= 0) {
+      btn.style.display = isManager ? '' : 'none';
+    }
+  });
+
+  // Manager banner
+  var mgrName = document.getElementById('mgr-banner-name');
+  if(mgrName) mgrName.textContent = '🏪 ' + n + '・' + store;
+
+  // Leave sub
+  var leaveSub = document.getElementById('leave-sub');
+  if(leaveSub) leaveSub.textContent = n + '・' + store;
+
+  // Mymonth sub
+  var now = new Date();
+  var mymonthSub = document.getElementById('mymonth-sub');
+  if(mymonthSub) mymonthSub.textContent = now.getFullYear() + '年' + (now.getMonth()+1) + '月・' + n;
+}
+
+// ══════════════════════════════════════════════════
+// CROSS-STORE (跨店打卡)
+// ══════════════════════════════════════════════════
+let activePunchStoreId   = null; // 目前打卡門市
+let activePunchStoreName = null;
+
+function updateStoreSelectorUI() {
+  if (!currentUser) return;
+  const myStoreId   = currentUser.storeId;
+  const myStoreName = currentUser.storeName;
+  // Default to home store
+  if (!activePunchStoreId) {
+    activePunchStoreId   = myStoreId;
+    activePunchStoreName = myStoreName;
+  }
+  const btn = document.getElementById('store-select-btn');
+  if (!btn) return;
+  const isSupport = activePunchStoreId !== myStoreId;
+  btn.textContent = activePunchStoreName + (isSupport ? '（支援）' : '（我的門市）');
+  btn.className = 'store-select-btn' + (isSupport ? ' support' : '');
+  // Update GPS detail text
+  const gpsDetail = document.getElementById('gps-detail-text') || document.getElementById('gps-detail');
+  if(gpsDetail) {
+    const store = STORES.find(s=>s.id===activePunchStoreId);
+    if(store) gpsDetail.textContent = '距' + store.name + ' -- 公尺（允許 ' + store.radius + ' 公尺）';
+  }
+}
+
+function openStorePicker() {
+  var existing = document.getElementById("store-picker-sheet");
+  if (existing) existing.remove();
+
+  var sheet = document.createElement("div");
+  sheet.id = "store-picker-sheet";
+  sheet.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:flex;align-items:flex-end;justify-content:center";
+
+  var inner = document.createElement("div");
+  inner.style.cssText = "width:100%;max-width:430px;background:#fff;border-radius:20px 20px 0 0;padding:20px 0 30px;animation:slideUp .25s ease";
+
+  var rows = "";
+  STORES.filter(function(s){ return s.active; }).forEach(function(s) {
+    var isHome = currentUser && s.id === currentUser.storeId;
+    var isCurrent = s.id === activePunchStoreId;
+    var bg = isCurrent ? "background:#eff6ff;" : "";
+    var color = isCurrent ? "#2563eb" : "#111827";
+    var check = isCurrent ? "<span style='color:#2563eb;font-size:18px'>&#10003;</span>" : "";
+    var label = isHome ? "我的門市" : "其他門市";
+    rows += "<div style='padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" + bg + "' data-id='" + s.id + "' data-name='" + s.name + "'>";
+    rows += "<div><div style='font-size:16px;font-weight:700;color:" + color + "'>" + s.name + "</div>";
+    rows += "<div style='font-size:12px;color:#9ca3af;margin-top:2px'>" + label + "・允許 " + s.radius + " 公尺</div></div>" + check + "</div>";
+  });
+
+  inner.innerHTML = 
+    "<div style='width:38px;height:4px;background:#d1d5db;border-radius:2px;margin:0 auto 14px'></div>" +
+    "<div style='font-size:17px;font-weight:800;padding:0 18px 14px;border-bottom:1px solid #f3f4f6;margin-bottom:8px'>選擇打卡門市</div>" +
+    rows +
+    "<div style='padding:12px 16px 0'><button id='store-picker-cancel-btn' style='width:100%;padding:13px;background:#f3f4f6;color:#374151;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer'>取消</button></div>";
+
+  sheet.appendChild(inner);
+  document.body.appendChild(sheet);
+
+  sheet.addEventListener("click", function(e) {
+    if (e.target === sheet) sheet.remove();
+  });
+  
+  inner.addEventListener("click", function(e) {
+    var btn = e.target.closest("[data-id]");
+    if (btn) {
+      selectPunchStore(btn.dataset.id, btn.dataset.name);
+      sheet.remove();
+    }
+    var cancel = e.target.closest("#store-picker-cancel-btn");
+    if (cancel) sheet.remove();
+  });
+}
+
+function selectPunchStore(id, name) {
+  activePunchStoreId = id;
+  activePunchStoreName = name;
+  updateStoreSelectorUI();
+  const sheet = document.getElementById('store-picker-sheet');
+  if(sheet) sheet.remove();
+  // Re-simulate GPS for new store
+  simulateGPS();
+  showToast('已切換至 ' + name, '');
+}
+
+// ══════════════════════════════════════════════════
+// EMPLOYEE MANAGEMENT
+// ══════════════════════════════════════════════════
+function goToEmpManage() {
+  renderEmpManageList();
+  showPage('page-emp-manage','mgr',4);
+}
+
+function showAddEmpForm() {
+  const form = document.getElementById('add-emp-form');
+  if(!form) return;
+  form.style.display = form.style.display==='none' ? 'block' : 'none';
+  const sel = document.getElementById('ne-store');
+  if(sel) sel.innerHTML = STORES.filter(s=>s.active).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  document.getElementById('ne-name').value = '';
+  document.getElementById('ne-code').value = '';
+  document.getElementById('add-emp-err').textContent = '';
+}
+
+function confirmAddEmp() {
+  const name    = (document.getElementById('ne-name').value||'').trim();
+  const code    = (document.getElementById('ne-code').value||'').trim().toUpperCase();
+  const storeId = document.getElementById('ne-store').value;
+  const role    = document.getElementById('ne-role').value;
+  const errEl   = document.getElementById('add-emp-err');
+  errEl.textContent = '';
+  if(!name) { errEl.textContent='請填寫姓名'; return; }
+  if(!code) { errEl.textContent='請填寫員工編號'; return; }
+  if(EMPLOYEES.find(e=>e.code.toUpperCase()===code)) { errEl.textContent='此員工編號已存在'; return; }
+
+  const store = STORES.find(s=>s.id===storeId);
+  const newEmp = { id:'e'+Date.now(), name, code, storeId, store:storeId, storeName:store?store.name:'', role, active:true };
+  EMPLOYEES.push(newEmp);
+
+  if(API_URL) {
+    try { apiCall('addEmployee', newEmp); } catch(e) {}
+  }
+  document.getElementById('add-emp-form').style.display='none';
+  renderEmpManageList();
+  showToast('✅ ' + name + ' (編號：' + code + ') 已新增', 'success');
+}
+
+function renderEmpManageList() {
+  const c = document.getElementById('emp-manage-list'); if(!c) return;
+  if(!EMPLOYEES.length) { c.innerHTML='<div style="text-align:center;color:var(--gray-400);padding:24px">尚無員工資料</div>'; return; }
+  c.innerHTML = EMPLOYEES.map(e => {
+    const store = STORES.find(s=>s.id===(e.storeId||e.store));
+    return `<div class="emp-mgr-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:42px;height:42px;border-radius:50%;background:${e.role==='manager'?'var(--success-light)':'var(--primary-light)'};display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:${e.role==='manager'?'var(--success)':'var(--primary)'};flex-shrink:0">${e.name.charAt(0)}</div>
+        <div style="flex:1">
+          <div style="font-size:15px;font-weight:800">${e.name} ${e.role==='manager'?'<span style="font-size:11px;color:var(--success)">👑主管</span>':''}</div>
+          <div style="font-size:12px;color:var(--gray-500);margin-top:2px">編號：<b>${e.code}</b>・${store?store.name:'未知門市'}</div>
+        </div>
+        <div style="display:flex;gap:5px;flex-shrink:0">
+          <button onclick="toggleEditEmp('${e.id}')" style="background:var(--primary-light);color:var(--primary);border:none;padding:5px 9px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">編輯</button>
+          <button onclick="toggleEmpActive('${e.id}')" style="background:${e.active!==false?'var(--danger-light)':'var(--success-light)'};color:${e.active!==false?'var(--danger)':'var(--success)'};border:none;padding:5px 9px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">${e.active!==false?'停用':'啟用'}</button>
+        </div>
+      </div>
+      <div id="edit-emp-${e.id}" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--gray-100)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><div class="form-label" style="font-size:13px">姓名</div><input class="form-input" id="en-${e.id}" value="${e.name}" style="padding:9px 11px;font-size:14px"></div>
+          <div><div class="form-label" style="font-size:13px">員工編號</div><input class="form-input" id="ec-${e.id}" value="${e.code}" style="padding:9px 11px;font-size:14px;text-transform:uppercase"></div>
+        </div>
+        <div style="margin-bottom:10px"><div class="form-label" style="font-size:13px">所屬門市</div>
+          <select class="form-select" id="es-${e.id}" style="padding:9px 11px;font-size:14px">${STORES.filter(s=>s.active).map(s=>`<option value="${s.id}" ${(e.storeId||e.store)===s.id?'selected':''}>${s.name}</option>`).join('')}</select>
+        </div>
+        <div style="display:flex;gap:7px">
+          <button onclick="saveEmpEdit('${e.id}')" style="flex:1;padding:10px;background:var(--success);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer">✅ 儲存</button>
+          <button onclick="toggleEditEmp('${e.id}')" style="padding:10px 14px;background:var(--gray-100);color:var(--gray-700);border:none;border-radius:9px;font-size:14px;cursor:pointer">取消</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleEditEmp(id) {
+  const f = document.getElementById('edit-emp-'+id);
+  if(f) f.style.display = f.style.display==='none'?'block':'none';
+}
+
+function saveEmpEdit(id) {
+  const emp = EMPLOYEES.find(e=>e.id===id); if(!emp) return;
+  const name    = (document.getElementById('en-'+id).value||'').trim();
+  const code    = (document.getElementById('ec-'+id).value||'').trim().toUpperCase();
+  const storeId = document.getElementById('es-'+id).value;
+  if(!name||!code) { showToast('⚠️ 姓名和編號不能為空','danger'); return; }
+  if(EMPLOYEES.find(e=>e.id!==id && e.code.toUpperCase()===code)) { showToast('⚠️ 員工編號已被使用','danger'); return; }
+  emp.name=name; emp.code=code; emp.storeId=storeId; emp.store=storeId;
+  const store=STORES.find(s=>s.id===storeId);
+  emp.storeName=store?store.name:'';
+  if(API_URL) { try { apiCall('updateEmployee',emp); } catch(e){} }
+  toggleEditEmp(id);
+  renderEmpManageList();
+  showToast('✅ ' + name + ' 資料已更新','success');
+}
+
+function toggleEmpActive(id) {
+  const emp=EMPLOYEES.find(e=>e.id===id); if(!emp) return;
+  emp.active=!emp.active;
+  if(API_URL) { try { apiCall('updateEmployee',emp); } catch(e){} }
+  renderEmpManageList();
+  showToast(emp.name + ' 已' + (emp.active?'啟用':'停用'), emp.active?'success':'');
+}
+
+// ══════════════════════════════════════════════════
+// NAV HELPERS
+// ══════════════════════════════════════════════════
+function buildEmpNavHTML() {
+  return `<div id="nav-emp" style="display:contents">
+    <button class="nb active" onclick="showPage('page-clock','emp',0)" id="nav-e-0"><span class="ni">🕐</span>打卡</button>
+    <button class="nb" onclick="showPage('page-leave-apply','emp',1);renderLeaveApplyPage()" id="nav-e-1"><span class="ni">📋</span>請假</button>
+    <button class="nb" onclick="showPage('page-mymonth','emp',2);loadMyMonth()" id="nav-e-2"><span class="ni">📅</span>月統計</button>
+  </div>`;
+}
+
+function buildManagerNav() {
+  document.getElementById('main-nav').innerHTML = `
+    <div id="nav-mgr" style="display:contents">
+      <button class="nb active" onclick="showPage('page-overview','mgr',0)" id="nav-m-0"><span class="ni">🏠</span>總覽</button>
+      <button class="nb" onclick="showPage('page-daily-review','mgr',1);renderDailyReview()" id="nav-m-1"><span class="ni">✅</span>出勤確認</button>
+      <button class="nb" onclick="showPage('page-leave-review','mgr',2);renderLeaveReview('pending')" id="nav-m-2"><span class="ni">📋</span>假單</button>
+      <button class="nb" onclick="showPage('page-month','mgr',3)" id="nav-m-3"><span class="ni">📊</span>統計</button>
+      <button class="nb" onclick="showPage('page-settings','mgr',4);renderStoreCards()" id="nav-m-4"><span class="ni">⚙️</span>設定</button>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════
+// API CALL
+// ══════════════════════════════════════════════════
+function apiCall(action, data) {
+  data = data || {};
+  if(!API_URL) { console.log('[Mock]',action,data); return {success:true}; }
+  try {
+    // Use GET with URL params to avoid CORS issues
+    var params = 'action=' + encodeURIComponent(action);
+    Object.keys(data).forEach(function(k) {
+      if (data[k] !== undefined && data[k] !== null) {
+        params += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(
+          typeof data[k] === 'object' ? JSON.stringify(data[k]) : data[k]
+        );
+      }
+    });
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', API_URL + '?' + params, false);
+    xhr.send();
+    return JSON.parse(xhr.responseText);
+  } catch(err) {
+    console.error('API error:',err);
+    return {success:false,error:err.message};
+  }
+}
+
+// API URL save
+function saveApiUrl(url) {
+  if(!url) return;
+  API_URL = url.trim();
+  try { localStorage.setItem('punch_api_url', API_URL); } catch(e){}
+  showToast('✅ API 網址已儲存','success');
+}
+
+// Loading helpers
+function showLoading(msg) {
+  let el = document.getElementById('loading-overlay');
+  if(!el) {
+    el=document.createElement('div');
+    el.id='loading-overlay';
+    el.style.cssText='position:fixed;inset:0;background:rgba(255,255,255,.85);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px';
+    el.innerHTML='<div style="width:40px;height:40px;border:4px solid var(--gray-200);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite"></div><div id="loading-msg" style="font-size:14px;font-weight:600;color:var(--gray-600)">處理中…</div>';
+    document.body.appendChild(el);
+  }
+  el.querySelector('#loading-msg').textContent=msg||'處理中…';
+  el.style.display='flex';
+}
+function hideLoading() {
+  const el=document.getElementById('loading-overlay');
+  if(el) el.style.display='none';
+}
+
+// ── Init ──────────────────────────────────────────────
+renderMonthTable();
+renderStoreRank();
+initApp();
+</script>
+</body>
+</html>
