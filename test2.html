@@ -464,6 +464,7 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
     </div>
     <div style="font-size:12px;color:var(--g4)" id="ov-date"></div>
   </div>
+  <div id="overview-rev-missing" style="padding:0 14px"></div>
   <div class="sec"><div class="sec-title">今日打卡狀況</div></div>
   <div id="overview-emp-list"><div class="loading-spin"></div></div>
   <div class="divider" style="margin-top:4px"></div>
@@ -524,6 +525,10 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
           <div style="font-size:10px;color:#0c4a6e">扣 Uber 抽成後</div>
           <div id="mgr-rev-month-net" style="font-size:17px;font-weight:800;color:#0369a1">$—</div>
         </div>
+      </div>
+      <div style="background:#FEF2F2;border-radius:8px;padding:9px;text-align:center;margin-bottom:9px">
+        <div style="font-size:10px;color:#991b1b">本月人事佔比（人事成本 ÷ 扣抽後淨營收）</div>
+        <div id="mgr-rev-month-hrpct" style="font-size:17px;font-weight:800;color:#be123c">—</div>
       </div>
       <div style="background:#F9FAFB;border-radius:8px;padding:8px 10px;font-size:11px;color:#6B7280;line-height:1.6" id="mgr-rev-month-breakdown">
         載入中…
@@ -763,8 +768,21 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
     </div>
     <!-- ⭐ 新增:生日(算生日禮金) -->
     <div style="margin-bottom:8px"><div class="form-label" style="font-size:12px">生日 (生日當月發 200 元禮金)</div><input type="date" class="form-input" id="ne-birthday" style="padding:9px 11px;font-size:14px"></div>
-    <!-- ⭐ 新增:健保級距(算勞健保自付額) - 只有老闆能看到 -->
-    <div id="ne-health-grade-wrap" style="margin-bottom:12px;display:none"><div class="form-label" style="font-size:12px">健保級距 (老闆設定)</div><input type="number" class="form-input" id="ne-health-grade" placeholder="例:42000" style="padding:9px 11px;font-size:14px"></div>
+    <!-- ⭐ 新增:身分證/出生年月日/投保資料 - 只有老闆能看到 -->
+    <div id="ne-health-grade-wrap" style="margin-bottom:12px;display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><div class="form-label" style="font-size:12px">身分證字號</div><input class="form-input" id="ne-idnum" placeholder="A123456789" style="padding:9px 11px;font-size:14px;text-transform:uppercase"></div>
+        <div><div class="form-label" style="font-size:12px">出生年月日</div><input type="date" class="form-input" id="ne-dob" style="padding:9px 11px;font-size:14px"></div>
+      </div>
+      <div style="border:1.5px solid #E0F2FE;background:#F8FBFF;border-radius:10px;padding:10px">
+        <div style="font-size:12px;font-weight:800;color:#0c4a6e;margin-bottom:6px">🛡️ 投保資料 (老闆設定)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div><div class="form-label" style="font-size:11px">健保級距</div><input type="number" class="form-input" id="ne-health-grade" placeholder="例:42000" style="padding:8px;font-size:13px"></div>
+          <div><div class="form-label" style="font-size:11px">勞保級距</div><input type="number" class="form-input" id="ne-labor-grade" placeholder="例:42000" style="padding:8px;font-size:13px"></div>
+          <div><div class="form-label" style="font-size:11px">勞退級距</div><input type="number" class="form-input" id="ne-pension-grade" placeholder="例:42000" style="padding:8px;font-size:13px"></div>
+        </div>
+      </div>
+    </div>
     <div style="margin-bottom:12px"><div class="form-label" style="font-size:12px">角色</div><select class="form-select" id="ne-role" style="padding:9px 11px;font-size:14px"><option value="employee">員工</option><option value="manager">主管</option></select></div>
     <div style="display:flex;gap:7px">
       <button onclick="confirmAddEmp()" style="flex:1;padding:11px;background:var(--s);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer">✅ 確認新增</button>
@@ -2669,6 +2687,45 @@ async function renderOverview() {
   if (dateEl) dateEl.textContent = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日';
   const today = getTodayTW();
   const myStoreId = getActiveStoreId();
+
+  // ⭐ #2 業績未登警告 (本月已過、非公休、無業績的日期)
+  (async () => {
+    const missEl = document.getElementById('overview-rev-missing');
+    if (!missEl) return;
+    if (!myStoreId || myStoreId === 'all'){ missEl.innerHTML = ''; return; }
+    try {
+      const ym = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+      const [storeRevRaw, calRaw] = await Promise.all([
+        fbGet('revenue/' + myStoreId), fbGet('calendar/' + ym)
+      ]);
+      const rev = storeRevRaw || {};
+      const cal = calRaw || {};
+      const globalHolidays = cal.holidays || [];
+      const storeHolidays = (cal.storeHolidays && cal.storeHolidays[myStoreId]) || [];
+      const todayStr = getTodayTW();
+      const missing = [];
+      for (let d = 1; d <= now.getDate(); d++){
+        const ds = ym + '-' + String(d).padStart(2,'0');
+        if (ds > todayStr) continue;
+        if (globalHolidays.includes(ds) || storeHolidays.includes(ds)) continue;
+        const dr = rev[ds];
+        const dayTotal = (dr && !dr.holiday) ? (
+          (dr.lunchPickup||0)+(dr.lunchDelivery||0)+(dr.lunchUber||0)+
+          (dr.dinnerPickup||0)+(dr.dinnerDelivery||0)+(dr.dinnerUber||0)
+        ) : 0;
+        if (dayTotal <= 0) missing.push(ds.substr(5));
+      }
+      if (missing.length === 0){
+        missEl.innerHTML = '<div style="background:#F0FDF4;border-left:3px solid #10b981;border-radius:8px;padding:9px 12px;font-size:12px;color:#166534;margin-bottom:4px">✓ 本月業績皆已登錄</div>';
+      } else {
+        missEl.innerHTML = '<div style="background:#FEF2F2;border-left:3px solid #c00;border-radius:8px;padding:10px 12px;margin-bottom:4px">'
+          + '<div style="font-size:13px;font-weight:800;color:#991b1b;margin-bottom:4px">⚠️ 本月有 ' + missing.length + ' 天業績未登</div>'
+          + '<div style="font-size:12px;color:#b91c1c;line-height:1.6">' + missing.join('、') + '</div>'
+          + '<button onclick="document.getElementById(\'mgr-rev-date\')&&document.getElementById(\'mgr-rev-date\').scrollIntoView({behavior:\'smooth\',block:\'center\'})" style="margin-top:8px;background:#BE6148;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">前往補登</button>'
+          + '</div>';
+      }
+    } catch(err){ missEl.innerHTML = ''; }
+  })();
   const empListEl = document.getElementById('overview-emp-list');
   if (empListEl) empListEl.innerHTML = '<div class="loading-spin"></div>';
 
@@ -2803,6 +2860,34 @@ window.mgrLoadMonthRevenue = async function(storeId){
   document.getElementById('mgr-rev-month-days').textContent = daysLogged + ' / ' + today + ' 天已登';
   document.getElementById('mgr-rev-month-total').textContent = '$' + total.toLocaleString();
   document.getElementById('mgr-rev-month-net').textContent = '$' + net.toLocaleString();
+  
+  // ⭐ #3 本月人事佔比 (跟老闆後台同一套算法:店內員工 actualPay 加總 ÷ 扣抽後淨營收)
+  (async () => {
+    const pctEl = document.getElementById('mgr-rev-month-hrpct');
+    if (!pctEl) return;
+    try {
+      const yy = now.getFullYear(), mm = now.getMonth() + 1;
+      const [allPunches, allLeaves, kpiData] = await Promise.all([
+        fbGet('punches'), fbGet('leaves'), fbGet('kpi/' + yyyymm)
+      ]);
+      const kpiObj = kpiData || {};
+      const prefetched = {punches: allPunches, leaves: allLeaves};
+      const storeEmps = EMPLOYEES.filter(e => e.active !== false && e.role !== 'superadmin' && e.storeId === storeId);
+      let hrCost = 0;
+      for (const emp of storeEmps){
+        const md = await aggregateEmployeeMonthData(emp.id, yy, mm, prefetched);
+        md.standardHours = monthlyHours;
+        const k = kpiObj[emp.id] || {};
+        md.disciplineScore = k.discipline !== undefined ? k.discipline : 10;
+        md.isBirthdayMonth = isBirthdayThisMonth(emp.birthday, yy, mm);
+        hrCost += calculateSalary(emp, md).actualPay;
+      }
+      pctEl.textContent = (net > 0) ? (hrCost / net * 100).toFixed(1) + '%' : '—';
+      pctEl.title = '人事成本 $' + Math.round(hrCost).toLocaleString() + ' ÷ 淨營收 $' + net.toLocaleString();
+    } catch (err){
+      pctEl.textContent = '—';
+    }
+  })();
   
   let breakdown = '';
   if (total === 0){
@@ -4403,7 +4488,7 @@ function renderEmpList() {
     // ⭐ 健保級距只有老闆 (superadmin) 能看到/編輯
     const isSuperadmin = currentUser && currentUser.role === 'superadmin';
     const healthGradeHtml = isSuperadmin
-      ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px"><div><div class="form-label" style="font-size:12px">⭐ 生日</div><input type="date" class="form-input" id="eb-' + e.id + '" value="' + bdayVal + '" style="padding:8px 11px;font-size:14px"></div><div><div class="form-label" style="font-size:12px">⭐ 健保級距 (老闆設定)</div><input type="number" class="form-input" id="eh-' + e.id + '" value="' + (e.healthGrade||'') + '" placeholder="例:42000" style="padding:8px 11px;font-size:14px"></div></div>'
+      ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><div><div class="form-label" style="font-size:12px">⭐ 生日</div><input type="date" class="form-input" id="eb-' + e.id + '" value="' + bdayVal + '" style="padding:8px 11px;font-size:14px"></div><div><div class="form-label" style="font-size:12px">⭐ 身分證字號</div><input class="form-input" id="eidn-' + e.id + '" value="' + (e.idNumber||'') + '" placeholder="A123456789" style="padding:8px 11px;font-size:14px;text-transform:uppercase"></div></div><div style="margin-bottom:8px"><div class="form-label" style="font-size:12px">⭐ 出生年月日</div><input type="date" class="form-input" id="edob-' + e.id + '" value="' + (e.dob||'') + '" style="padding:8px 11px;font-size:14px"></div><div style="border:1.5px solid #E0F2FE;background:#F8FBFF;border-radius:10px;padding:10px;margin-bottom:10px"><div style="font-size:12px;font-weight:800;color:#0c4a6e;margin-bottom:6px">🛡️ 投保資料</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px"><div><div class="form-label" style="font-size:11px">健保級距</div><input type="number" class="form-input" id="eh-' + e.id + '" value="' + (e.healthGrade||'') + '" placeholder="42000" style="padding:8px;font-size:13px"></div><div><div class="form-label" style="font-size:11px">勞保級距</div><input type="number" class="form-input" id="elab-' + e.id + '" value="' + (e.laborGrade||'') + '" placeholder="42000" style="padding:8px;font-size:13px"></div><div><div class="form-label" style="font-size:11px">勞退級距</div><input type="number" class="form-input" id="epen-' + e.id + '" value="' + (e.pensionGrade||'') + '" placeholder="42000" style="padding:8px;font-size:13px"></div></div></div>'
       : '<div style="margin-bottom:10px"><div class="form-label" style="font-size:12px">⭐ 生日</div><input type="date" class="form-input" id="eb-' + e.id + '" value="' + bdayVal + '" style="padding:8px 11px;font-size:14px"></div>';
     editForm.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><div><div class="form-label" style="font-size:12px">姓名</div><input class="form-input" id="en-' + e.id + '" value="' + e.name + '" style="padding:8px 11px;font-size:14px"></div><div><div class="form-label" style="font-size:12px">員工編號</div><input class="form-input" id="ec-' + e.id + '" value="' + e.code + '" style="padding:8px 11px;font-size:14px;text-transform:uppercase"></div></div><div style="margin-bottom:10px"><div class="form-label" style="font-size:12px">所屬門市</div><select class="form-select" id="es-' + e.id + '" style="padding:8px 11px;font-size:14px">' + STORES.filter(s=>s.active).map(s=>'<option value="'+s.id+'"'+(storeId===s.id?' selected':'')+'>'+s.name+'</option>').join('') + '</select></div><div style="margin-bottom:10px"><div class="form-label" style="font-size:12px">⭐ 職階(算底薪/職務津貼)</div><select class="form-select" id="ep-' + e.id + '" style="padding:8px 11px;font-size:14px">' + positionOpts + '</select></div>' + healthGradeHtml + '<div style="margin-bottom:10px"><div class="form-label" style="font-size:12px">角色</div><select class="form-select" id="er-' + e.id + '" style="padding:8px 11px;font-size:14px"><option value="employee"' + (e.role==='employee'?' selected':'') + '>員工</option><option value="manager"' + (e.role==='manager'?' selected':'') + '>主管</option></select></div><div style="display:flex;gap:7px"><button style="flex:1;padding:10px;background:var(--s);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer" id="save-emp-' + e.id + '">✅ 儲存</button><button style="padding:10px 13px;background:var(--g1);color:var(--g7);border:none;border-radius:9px;font-size:13px;cursor:pointer" id="cancel-emp-' + e.id + '">取消</button></div>';
     card.appendChild(editForm); c.appendChild(card);
@@ -4438,12 +4523,18 @@ async function saveEmpEdit(id) {
   emp.position=position; emp.birthday=birthday;
   
   const updates = {name:emp.name, code:emp.code, storeId, role, position, birthday};
-  // ⭐ 健保級距:只有老闆能改
+  // ⭐ 健保級距/投保資料/身分證/出生年月日:只有老闆能改
   if (currentUser && currentUser.role === 'superadmin'){
     const healthGradeStr = (document.getElementById('eh-'+id)||{}).value || '';
     const healthGrade = parseInt(healthGradeStr) || 0;
     emp.healthGrade = healthGrade;
     updates.healthGrade = healthGrade;
+    const idNumber = ((document.getElementById('eidn-'+id)||{}).value || '').trim().toUpperCase();
+    const dob = (document.getElementById('edob-'+id)||{}).value || '';
+    const laborGrade = parseInt((document.getElementById('elab-'+id)||{}).value) || 0;
+    const pensionGrade = parseInt((document.getElementById('epen-'+id)||{}).value) || 0;
+    emp.idNumber = idNumber; emp.dob = dob; emp.laborGrade = laborGrade; emp.pensionGrade = pensionGrade;
+    updates.idNumber = idNumber; updates.dob = dob; updates.laborGrade = laborGrade; updates.pensionGrade = pensionGrade;
   }
   
   await fbUpdate('employees/' + id, updates);
@@ -4498,6 +4589,10 @@ window.confirmAddEmp = async function() {
   const birthday=(document.getElementById('ne-birthday')||{}).value||'';
   const healthGradeStr=(document.getElementById('ne-health-grade')||{}).value||'';
   const healthGrade=parseInt(healthGradeStr) || 0;
+  const idNumber=((document.getElementById('ne-idnum')||{}).value||'').trim().toUpperCase();
+  const dob=(document.getElementById('ne-dob')||{}).value||'';
+  const laborGrade=parseInt((document.getElementById('ne-labor-grade')||{}).value)||0;
+  const pensionGrade=parseInt((document.getElementById('ne-pension-grade')||{}).value)||0;
   const errEl=document.getElementById('add-emp-err');
   if(!name.trim()){errEl.textContent='請填寫姓名';return;}
   if(!code.trim()){errEl.textContent='請填寫員工編號';return;}
@@ -4512,7 +4607,7 @@ window.confirmAddEmp = async function() {
   }
   const data={
     name:name.trim(),code:code.trim(),storeId,storeName:store?store.name:'',role,active:true,hireDate,
-    position, birthday:birthdayMD, healthGrade
+    position, birthday:birthdayMD, healthGrade, idNumber, dob, laborGrade, pensionGrade
   };
   const key=await fbPush('employees',data);
   EMPLOYEES.push({...data,id:key});
@@ -6372,6 +6467,46 @@ async function bossLoadDashboard(){
     todoEl.innerHTML = todos.map(t => '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + t.color + ';flex-shrink:0"></span>' + t.text + '</div>').join('');
   }
   
+  // ⭐ #1 特休折現提醒 (週年到期 30 天內、本週年度仍有未休特休 → 將折現)
+  (function(){
+    const warnEl = document.getElementById('boss-dash-annual-warn');
+    if (!warnEl) return;
+    const nowD = new Date();
+    const atRisk = [];
+    emps.forEach(e => {
+      if (!e.hireDate) return;
+      const total = calcAnnualDays(e.hireDate);
+      if (total <= 0) return;
+      const period = getAnnualPeriod(e.hireDate);
+      if (!period.end) return;
+      let usedH = 0;
+      if (allLeaves){
+        Object.values(allLeaves).forEach(l => {
+          if (l.empId===e.id && l.type==='annual' && l.status==='approved' && !l.isPatch){
+            if (!period.start || (l.date >= period.start && l.date < period.end)) usedH += (l.hours||0);
+          }
+        });
+      }
+      const remaining = total - (usedH/8);
+      if (remaining <= 0) return;
+      const end = parseLocalDate(period.end);
+      const daysLeft = Math.ceil((end - nowD) / 86400000);
+      if (daysLeft < 0 || daysLeft > 30) return;
+      atRisk.push({name: e.name, remaining: Math.round(remaining*10)/10, daysLeft, endLabel: (end.getMonth()+1)+'/'+end.getDate()});
+    });
+    atRisk.sort((a,b)=>a.daysLeft-b.daysLeft);
+    if (atRisk.length === 0){
+      warnEl.innerHTML = '<div style="color:#10b981;text-align:center;padding:14px">✓ 近期沒有特休將到期未休完</div>';
+    } else {
+      warnEl.innerHTML = atRisk.map(r =>
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F3F4F6;font-size:12px">'
+        + '<span style="font-weight:700">' + r.name + '</span>'
+        + '<span style="color:#b45309;text-align:right">未休 ' + r.remaining + ' 天 · 週年 ' + r.endLabel + ' 到期（' + (r.daysLeft===0?'今天':'剩 '+r.daysLeft+' 天') + '）</span>'
+        + '</div>'
+      ).join('');
+    }
+  })();
+
   // 各店比較表
   await renderStoreCompareTable({punches: allPunches, leaves: allLeaves}, allRevObj, kpiDataObj);
 }
@@ -6605,6 +6740,9 @@ async function bossLoadRev(){
     bossState.storeId === 'all' ? '各店平均每日營收 · 12 個月趨勢' : (storeName + ' · 分時段營收');
   document.getElementById('boss-rev-total-label').textContent = 
     bossState.storeId === 'all' ? '全公司本月總營業額' : (storeName + ' 本月總營業額');
+  const detailTitleEl = document.getElementById('boss-rev-detail-title');
+  if (detailTitleEl) detailTitleEl.textContent = 
+    bossState.storeId === 'all' ? '全公司每日合計 · 各時段營收' : (storeName + ' · 每日明細');
   
   // 抓資料
   const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
@@ -6907,7 +7045,8 @@ async function bossLoadPayroll(){
     if (saved.annualLeaveCash !== undefined) monthData.annualLeaveCash = saved.annualLeaveCash;
     
     const calc = calculateSalary(emp, monthData);
-    rows.push({emp, monthData, calc, saved});
+    const kpiScore = (kpi && kpi.weightedScore !== undefined) ? kpi.weightedScore : null;
+    rows.push({emp, monthData, calc, saved, kpiScore});
   }
   
   // 結算狀態
@@ -6945,6 +7084,7 @@ function renderPayrollTable(rows){
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB">主管津貼</th>';
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB">業務津貼</th>';
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB;background:#BE6148;color:#fff">應領</th>';
+  html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB;background:#EEF2FF;color:#3730a3">KPI<br>分數</th>';
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB">績效獎金</th>';
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB;background:#BE6148;color:#fff">總薪資</th>';
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB">勞保自付</th>';
@@ -6996,6 +7136,8 @@ function renderPayrollTable(rows){
     // 黃格:業務津貼
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right"><span class="bp-yellow" data-emp="' + emp.id + '" data-field="salesBonus" data-label="業務津貼" onclick="bossOpenEdit(this,' + (c.salesBonus||0) + ')" style="background:#FEF9E7;border:1px dashed #F59E0B;border-radius:4px;padding:2px 5px;cursor:pointer;display:inline-block">' + (c.salesBonus || '—') + '</span></td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;font-weight:700">' + c.totalPayable.toLocaleString() + '</td>';
+    // KPI 分數 (唯讀,只老闆看得到)
+    html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:center;background:#F5F6FF;color:' + (r.kpiScore!=null?'#3730a3':'#9CA3AF') + ';font-weight:700">' + (r.kpiScore!=null ? Number(r.kpiScore).toFixed(1) : '—') + '</td>';
     // 黃格:績效獎金
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right"><span class="bp-yellow" data-emp="' + emp.id + '" data-field="performanceBonus" data-label="績效獎金" onclick="bossOpenEdit(this,' + (c.performanceBonus||0) + ')" style="background:#FEF9E7;border:1px dashed #F59E0B;border-radius:4px;padding:2px 5px;cursor:pointer;display:inline-block;color:#2563eb;font-weight:700">' + (c.performanceBonus || '—') + '</span></td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;font-weight:800;color:#BE6148">' + c.totalSalary.toLocaleString() + '</td>';
@@ -7014,8 +7156,9 @@ function renderPayrollTable(rows){
   }, {totalPayable:0, totalSalary:0, actualPay:0});
   
   html += '<tr style="background:#2D2A26;color:#fff;font-weight:800">';
-  html += '<td colspan="16" style="padding:8px;text-align:right">合計</td>';
+  html += '<td colspan="17" style="padding:8px;text-align:right">合計</td>';
   html += '<td style="padding:8px;text-align:right">' + totals.totalPayable.toLocaleString() + '</td>';
+  html += '<td></td>';
   html += '<td></td>';
   html += '<td style="padding:8px;text-align:right">' + totals.totalSalary.toLocaleString() + '</td>';
   html += '<td colspan="2"></td>';
@@ -7342,6 +7485,8 @@ async function bossLoadSettings(){
   
   // ⭐ 計算本月應登業績天數
   bossUpdateExpectedDays();
+  // ⭐ #5 載入未來 12 個月批次設定
+  bossBatchLoad();
 }
 
 function bossUpdateExpectedDays(){
@@ -7433,6 +7578,111 @@ window.bossSaveHolidays = async function(){
   document.getElementById('boss-holiday-msg').textContent = '✓ 已儲存 ' + holidays.length + ' 天公休日';
   document.getElementById('boss-holiday-msg').style.color = '#10b981';
   toast('✓ 公休日已儲存 (共 ' + holidays.length + ' 天)', 's');
+};
+
+// ⭐ #5 批次設定:未來 12 個月 月基本工時 + 公休日
+async function bossBatchLoad(){
+  const gridEl = document.getElementById('boss-batch-grid');
+  if (!gridEl) return;
+  const start = new Date(); start.setDate(1);
+  const months = [];
+  for (let i = 0; i < 12; i++){
+    const y = start.getFullYear() + Math.floor((start.getMonth() + i) / 12);
+    const m = (start.getMonth() + i) % 12 + 1;
+    months.push({y, m, ym: y + '-' + String(m).padStart(2,'0')});
+  }
+  const data = await Promise.all(months.map(mm => fbGet('calendar/' + mm.ym)));
+  bossState.batchMonths = months.map((mm, i) => {
+    const cal = data[i] || {};
+    return {y: mm.y, m: mm.m, ym: mm.ym, workHours: cal.workHours || monthlyHours || 176, holidays: [...(cal.holidays || [])]};
+  });
+  bossBatchRender();
+}
+
+function bossBatchRender(){
+  const gridEl = document.getElementById('boss-batch-grid');
+  if (!gridEl) return;
+  const WD = ['日','一','二','三','四','五','六'];
+  const now = new Date();
+  let html = '';
+  (bossState.batchMonths || []).forEach((mo, mi) => {
+    const lastDay = new Date(mo.y, mo.m, 0).getDate();
+    const firstWeek = new Date(mo.y, mo.m - 1, 1).getDay();
+    const isCurrent = (mo.y === now.getFullYear() && mo.m === now.getMonth() + 1);
+    let head = WD.map(w => '<th style="font-size:9px;color:#9CA3AF;font-weight:600;padding:1px 0">' + w + '</th>').join('');
+    let cells = '<tr>';
+    let dow = 0;
+    for (let b = 0; b < firstWeek; b++){ cells += '<td></td>'; dow++; }
+    for (let d = 1; d <= lastDay; d++){
+      const ds = mo.ym + '-' + String(d).padStart(2,'0');
+      const off = mo.holidays.includes(ds);
+      const isSun = dow % 7 === 0;
+      cells += '<td style="text-align:center;padding:1px"><div onclick="bossBatchToggle(' + mi + ',\'' + ds + '\')" data-bd="' + ds + '" style="width:24px;height:24px;line-height:24px;border-radius:6px;font-size:11px;cursor:pointer;margin:0 auto;' + (off ? 'background:#BE6148;color:#fff;font-weight:700' : ('color:' + (isSun ? '#c0392b' : '#374151'))) + '">' + d + '</div></td>';
+      dow++;
+      if (dow % 7 === 0 && d < lastDay) cells += '</tr><tr>';
+    }
+    cells += '</tr>';
+    html += '<div style="border:1.5px solid #ECE3DF;border-radius:11px;padding:11px;background:#FFFDFC">'
+      + '<div style="font-size:13px;font-weight:800;color:#7D3D2C;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center">' + mo.y + '年' + mo.m + '月' + (isCurrent ? '<span style="font-size:9px;font-weight:700;color:#BE6148;background:#FDF0ED;border-radius:20px;padding:1px 7px">本月</span>' : '') + '</div>'
+      + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px"><span style="font-size:10px;color:#374151;white-space:nowrap">月基本工時</span><input type="number" min="1" max="300" value="' + mo.workHours + '" onchange="bossBatchSetHours(' + mi + ',this.value)" style="flex:1;padding:5px 7px;font-size:12px;border:1.5px solid #D1D5DB;border-radius:6px;text-align:center;box-sizing:border-box"></div>'
+      + '<table style="width:100%;border-collapse:collapse"><thead><tr>' + head + '</tr></thead><tbody>' + cells + '</tbody></table></div>';
+  });
+  gridEl.innerHTML = html;
+}
+
+window.bossBatchToggle = function(mi, ds){
+  const mo = (bossState.batchMonths || [])[mi];
+  if (!mo) return;
+  const idx = mo.holidays.indexOf(ds);
+  if (idx >= 0) mo.holidays.splice(idx, 1); else mo.holidays.push(ds);
+  const cell = document.querySelector('[data-bd="' + ds + '"]');
+  if (cell){
+    const off = mo.holidays.includes(ds);
+    const d = parseInt(ds.split('-')[2]);
+    const firstWeek = new Date(mo.y, mo.m - 1, 1).getDay();
+    const isSun = ((firstWeek + d - 1) % 7) === 0;
+    if (off){ cell.style.background = '#BE6148'; cell.style.color = '#fff'; cell.style.fontWeight = '700'; }
+    else { cell.style.background = 'transparent'; cell.style.color = isSun ? '#c0392b' : '#374151'; cell.style.fontWeight = '400'; }
+  }
+};
+
+window.bossBatchSetHours = function(mi, val){
+  const mo = (bossState.batchMonths || [])[mi];
+  if (mo) mo.workHours = parseInt(val) || mo.workHours;
+};
+
+window.bossBatchApplyHours = function(){
+  const v = parseInt(document.getElementById('boss-batch-apply-hours').value);
+  const msg = document.getElementById('boss-batch-msg');
+  if (!v || v < 1 || v > 300){ msg.textContent = '⚠️ 請輸入 1-300 之間的數字'; msg.style.color = '#c00'; return; }
+  (bossState.batchMonths || []).forEach(mo => mo.workHours = v);
+  bossBatchRender();
+  msg.textContent = '✓ 已套用 ' + v + ' 小時到 12 個月(記得按下方儲存)';
+  msg.style.color = '#10b981';
+};
+
+window.bossBatchSaveAll = async function(){
+  const msg = document.getElementById('boss-batch-msg');
+  msg.textContent = '儲存中…'; msg.style.color = '#6B7280';
+  try {
+    for (const mo of (bossState.batchMonths || [])){
+      await fbUpdate('calendar/' + mo.ym, {
+        workHours: mo.workHours,
+        holidays: mo.holidays,
+        setBy: (currentUser || {}).id,
+        setAt: new Date().toISOString()
+      });
+    }
+    const now = new Date();
+    const cur = (bossState.batchMonths || []).find(mo => mo.y === now.getFullYear() && mo.m === now.getMonth() + 1);
+    if (cur) monthlyHours = cur.workHours;
+    msg.textContent = '✓ 已儲存未來 12 個月設定';
+    msg.style.color = '#10b981';
+    toast('✓ 一整年設定已儲存', 's');
+  } catch (err){
+    msg.textContent = '⚠️ 儲存失敗,請重試';
+    msg.style.color = '#c00';
+  }
 };
 
 // ════════════════════════════════════════════════════════
@@ -7973,6 +8223,12 @@ initApp().then(() => {
             <div style="text-align:center;color:#9CA3AF;padding:14px">載入中…</div>
           </div>
         </div>
+        <div style="background:#fff;border-radius:11px;padding:13px">
+          <div style="font-weight:800;font-size:13px;color:#7D3D2C;margin-bottom:9px">🌴 特休折現提醒（週年到期前未休完）</div>
+          <div id="boss-dash-annual-warn" style="font-size:12px">
+            <div style="text-align:center;color:#9CA3AF;padding:14px">載入中…</div>
+          </div>
+        </div>
       </div>
 
       <!-- 各店比較 -->
@@ -8048,6 +8304,7 @@ initApp().then(() => {
             <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-top:1px solid #E5E7EB;margin-top:5px;padding-top:8px"><span style="font-weight:800">扣抽成後</span><span id="boss-rev-net" style="font-weight:800;color:#BE6148">$—</span></div>
           </div>
           <div style="background:#fff;border-radius:11px;padding:13px;overflow-x:auto">
+            <div id="boss-rev-detail-title" style="font-size:13px;font-weight:800;color:#7D3D2C;margin-bottom:8px"></div>
             <div id="boss-rev-detail-table">
               <div style="text-align:center;color:#9CA3AF;padding:14px;font-size:13px">尚無業績資料,等主管開始登錄業績後會顯示明細</div>
             </div>
@@ -8223,6 +8480,23 @@ initApp().then(() => {
         </div>
         
       </div>
+
+      <!-- ⭐ #5 批次設定:未來 12 個月 月基本工時 + 公休日 -->
+      <div style="background:#fff;border-radius:11px;padding:16px;margin-top:14px">
+        <div style="font-weight:800;font-size:15px;color:#7D3D2C;margin-bottom:6px">📆 批次設定 · 未來 12 個月</div>
+        <div style="font-size:11.5px;color:#6B7280;margin-bottom:12px;line-height:1.6">一次設完一整年:每月填月基本工時、點月曆設公休日,最後按一次「儲存一整年」。可先用下方一鍵把同一個工時套用到全部月份。</div>
+        <div style="display:flex;align-items:center;gap:8px;background:#FDF0ED;border-radius:9px;padding:10px 12px;margin-bottom:14px;flex-wrap:wrap">
+          <span style="font-size:12px;font-weight:700;color:#7D3D2C">快速套用月基本工時到全部:</span>
+          <input type="number" id="boss-batch-apply-hours" min="1" max="300" placeholder="例:176" style="width:90px;padding:6px 8px;border:1.5px solid #D1D5DB;border-radius:7px;font-size:13px;text-align:center;box-sizing:border-box">
+          <button onclick="bossBatchApplyHours()" style="padding:6px 12px;background:#7D3D2C;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">套用全部</button>
+        </div>
+        <div id="boss-batch-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px"><div style="color:#9CA3AF;padding:14px">載入中…</div></div>
+        <div style="display:flex;gap:11px;font-size:10px;color:#6B7280;margin:12px 0">
+          <span><span style="display:inline-block;width:12px;height:12px;background:#BE6148;border-radius:3px;vertical-align:middle"></span> 公休(點月曆日期切換)</span>
+        </div>
+        <button onclick="bossBatchSaveAll()" style="width:100%;padding:12px;background:#BE6148;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer">💾 儲存一整年設定</button>
+        <div id="boss-batch-msg" style="font-size:12px;color:#6B7280;margin-top:7px;text-align:center;min-height:16px"></div>
+      </div>
     </section>
 
   </div>
@@ -8309,7 +8583,7 @@ initApp().then(() => {
       </div>
       <div style="margin-top:11px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">優點</div><textarea id="mgr-kpi-strengths" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
       <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">缺點</div><textarea id="mgr-kpi-weaknesses" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
-      <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">協助方式 & 未來規劃</div><textarea id="mgr-kpi-suggestions" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
+      <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">協助方式 & 人員進程規劃</div><textarea id="mgr-kpi-suggestions" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
       <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">本月外送津貼總額 (NT$)</div><input type="number" id="mgr-kpi-delivery" placeholder="0" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;box-sizing:border-box"></div>
       <button onclick="mgrSaveKpi()" style="width:100%;padding:12px;margin-top:13px;background:#BE6148;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer">儲存評分</button>
     </div>
