@@ -322,11 +322,15 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
       <div class="gps-detail" id="gps-detail">正在取得 GPS 位置</div>
     </div>
   </div>
+  <div class="uw-entry" id="uw-entry" onclick="openUpward()">📋 本月主管評核 · 點我填寫</div>
   <div class="punch-grid">
     <button class="punch-btn in"  id="pb-in1"  onclick="openConfirm('IN1')"><span>🟢</span><span>上班打卡</span><span class="punch-btn-sub">第一段</span></button>
     <button class="punch-btn out" id="pb-out1" onclick="openConfirm('OUT1')"><span>🔵</span><span>下班打卡</span><span class="punch-btn-sub">第一段</span></button>
     <button class="punch-btn in"  id="pb-in2"  onclick="openConfirm('IN2')"><span>🟢</span><span>上班打卡</span><span class="punch-btn-sub">第二段</span></button>
     <button class="punch-btn out" id="pb-out2" onclick="openConfirm('OUT2')"><span>🔵</span><span>下班打卡</span><span class="punch-btn-sub">第二段</span></button>
+  </div>
+  <div style="margin:0 14px 12px">
+    <button onclick="openUpwardPage()" style="width:100%;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#7D3D2C,#BE6148);color:#fff;font-size:14px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">📋 本月主管評核（下對上）→</button>
   </div>
   <div class="sec"><div class="sec-title">今日打卡紀錄</div></div>
   <div id="today-records"></div>
@@ -444,6 +448,14 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
 </div>
 
 <!-- MGR: 總覽 -->
+<div class="page" id="pg-upward">
+  <div class="topbar"><button onclick="showEmpPage('pg-clock',0)" style="background:#FDF0ED;color:#BE6148;border:none;padding:6px 11px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;margin-right:9px">← 返回</button><div class="topbar-title">主管評核（下對上）</div></div>
+  <div id="up-idnote" style="margin:12px 14px 0;border-radius:11px;padding:10px 13px;font-size:12.5px;font-weight:700;line-height:1.6;background:#FDF0ED;color:#A0503A"></div>
+  <div style="font-size:11px;font-weight:800;color:#9ca3af;letter-spacing:.5px;padding:14px 16px 6px">評核對象（本店領班以上 + 督導）</div>
+  <div id="up-picker" style="display:flex;gap:8px;overflow-x:auto;padding:0 14px 4px"></div>
+  <div id="up-items"></div>
+</div>
+
 <div class="page" id="pg-overview">
   <div class="banner mgr">
     <div><div class="banner-label">主管管理端</div><div class="banner-name" id="mgr-banner-name">🏪 載入中</div></div>
@@ -1334,6 +1346,7 @@ window.login = async function() {
     storeId: found.storeId || '',
     storeName: store ? store.name : (found.storeId ? '未知門市' : ''),
     role: found.role || 'employee',
+    position: found.position || '',
     managerAccess: found.managerAccess === true
   };
   saveSession(user);
@@ -3359,6 +3372,101 @@ window.mgrOpenKpi = async function(empId){
   document.getElementById('mgr-kpi-modal').style.display = 'flex';
 };
 
+// ===== 下對上評核(員工評領班以上+督導) =====
+const UPWARD_LEAD_POS = ['領班','組長','副店長','店長'];
+const UPWARD_NAMED_POS = ['領班','組長','副店長','店長','督導'];
+let upTargets = [], upIdx = 0, upState = {};
+function upYM(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function upBand(v){ return v<=2?'0-2':(v<=5?'3-5':(v<=8?'6-8':'9-10')); }
+function upNamed(){ return UPWARD_NAMED_POS.indexOf((currentUser&&currentUser.position)||'')>=0; }
+function upBuildTargets(){
+  const sid = currentUser ? currentUser.storeId : '';
+  const leads = EMPLOYEES.filter(e=>e.active!==false && e.storeId===sid && UPWARD_LEAD_POS.indexOf(e.position)>=0 && e.id!==currentUser.id);
+  const sups = EMPLOYEES.filter(e=>e.active!==false && e.position==='督導' && e.id!==currentUser.id);
+  upTargets = leads.concat(sups);
+}
+window.openUpwardPage = async function(){
+  if (!currentUser) return;
+  upBuildTargets();
+  if (upTargets.length===0){ toast('本月沒有需要你評核的對象','s'); return; }
+  const ym = upYM(); let all = {};
+  try { all = await fbGet('upwardReviews/'+ym) || {}; } catch(e){ all = {}; }
+  upState = {};
+  upTargets.forEach(t=>{
+    const r = (all[t.id]||{})[currentUser.id];
+    upState[t.id] = r ? {scores:Object.assign({},r.scores||{}), discipline:(r.discipline!==undefined?r.discipline:10), done:true}
+                      : {scores:{}, discipline:10, done:false};
+  });
+  const firstUndone = upTargets.findIndex(t=>!upState[t.id].done);
+  upIdx = firstUndone>=0 ? firstUndone : 0;
+  const note = document.getElementById('up-idnote');
+  if (upNamed()) note.innerHTML='🪪 你的身分：'+(currentUser.position||'')+' → 評分將<b>具名</b>送出';
+  else note.innerHTML='🔒 你的身分：'+(currentUser.position||'正職')+' → 評分將<b>匿名</b>送出,被評的人看不到是誰評的';
+  upRenderPicker(); upRenderItems();
+  showPage('pg-upward');
+};
+function upRenderPicker(){
+  const el=document.getElementById('up-picker');
+  el.innerHTML = upTargets.map((t,i)=>{
+    const done = upState[t.id].done, act = i===upIdx;
+    return '<div onclick="upPick('+i+')" style="flex-shrink:0;padding:9px 13px;border:1.5px solid '+(act?'#BE6148':'#E5E7EB')+';background:'+(act?'#FDF0ED':'#fff')+';border-radius:11px;cursor:pointer;text-align:center;min-width:88px">'
+      +'<div style="font-size:10px;color:'+(act?'#BE6148':'#6B7280')+';font-weight:700">'+(t.position||'')+'</div>'
+      +'<div style="font-size:13px;font-weight:800;color:#111827;margin-top:1px">'+t.name+'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+(done?'#16a34a':'#d1d5db')+';margin-left:5px"></span></div></div>';
+  }).join('');
+}
+window.upPick = function(i){ upIdx=i; upRenderPicker(); upRenderItems(); };
+function upRenderItems(){
+  const t = upTargets[upIdx], st = upState[t.id], bands=['0-2','3-5','6-8','9-10'];
+  let html = '';
+  KPI_ITEMS.forEach(it=>{
+    let v = (st.scores[it.key]!==undefined)?st.scores[it.key]:8; st.scores[it.key]=v;
+    const cur=upBand(v);
+    const rub = bands.map(b=>'<div id="up-rb-'+it.key+'-'+b+'" style="font-size:11px;line-height:1.5;padding:6px 10px;border-top:1px solid #f3f4f6;'+(b===cur?'background:#FDF0ED;color:#A0503A':'color:#4b5563')+'"><b style="display:inline-block;min-width:34px;color:'+(b===cur?'#BE6148':'#6b7280')+'">'+b+'</b> '+it.criteria[b]+'</div>').join('');
+    html += '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:13px;margin:0 14px 10px;padding:12px 14px">'
+      +'<div style="font-size:13.5px;font-weight:800;color:#111827">'+it.name+'</div>'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-top:9px"><div id="up-sv-'+it.key+'" style="font-size:26px;font-weight:900;color:#BE6148;width:34px;text-align:center">'+v+'</div>'
+      +'<input type="range" min="0" max="10" step="1" value="'+v+'" oninput="upScore(\''+it.key+'\',this.value)" style="flex:1"></div>'
+      +'<div style="margin-top:8px;border:1px solid #e5e7eb;border-radius:9px;overflow:hidden">'+rub+'</div></div>';
+  });
+  html += '<div style="font-size:11px;font-weight:800;color:#9ca3af;padding:14px 16px 6px">自我紀律（獨立計分）</div>'
+    +'<div style="background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;margin:0 14px 10px;overflow:hidden">'
+    +'<div style="padding:10px 14px;background:#1f2937;color:#fff;font-size:12px;font-weight:800;display:flex;justify-content:space-between">紀律表現 <span style="opacity:.7;font-weight:700">0 或 10 分</span></div>'
+    +'<div style="padding:13px 14px;display:flex;gap:8px">'
+    +'<div id="up-disc-ok" onclick="upDisc(10)" style="flex:1;padding:13px;border:1.5px solid '+(st.discipline===10?'#16a34a':'#e5e7eb')+';background:'+(st.discipline===10?'#f0fdf4':'#fff')+';border-radius:11px;text-align:center;cursor:pointer"><div style="font-size:14px;font-weight:800">✅ 符合</div><div style="font-size:11px;color:#6b7280">無違紀,10 分</div></div>'
+    +'<div id="up-disc-no" onclick="upDisc(0)" style="flex:1;padding:13px;border:1.5px solid '+(st.discipline===0?'#dc2626':'#e5e7eb')+';background:'+(st.discipline===0?'#fef2f2':'#fff')+';border-radius:11px;text-align:center;cursor:pointer"><div style="font-size:14px;font-weight:800">⛔ 不符合</div><div style="font-size:11px;color:#6b7280">有違紀,0 分</div></div>'
+    +'</div></div>'
+    +'<div style="margin:0 14px;padding:9px 13px;background:#f9fafb;border-radius:10px;font-size:11.5px;color:#6b7280;font-weight:700;line-height:1.6">🔒 你不會看到加總分數,送出後直接進系統,被評的人也看不到誰評的。</div>'
+    +'<button onclick="saveUpwardReview()" style="display:block;width:calc(100% - 28px);margin:12px 14px 24px;padding:14px;border:none;border-radius:13px;background:linear-gradient(135deg,#A0503A,#BE6148);color:#fff;font-size:15px;font-weight:800;cursor:pointer">📤 送出對「'+t.name+'」的評核'+(st.done?'(已交,可重送覆蓋)':'')+'</button>';
+  document.getElementById('up-items').innerHTML = html;
+}
+window.upScore = function(key,val){
+  val=parseInt(val); const t=upTargets[upIdx]; upState[t.id].scores[key]=val;
+  document.getElementById('up-sv-'+key).textContent=val;
+  const bands=['0-2','3-5','6-8','9-10'], cur=upBand(val);
+  bands.forEach(b=>{ const e=document.getElementById('up-rb-'+key+'-'+b); if(!e) return;
+    if(b===cur){ e.style.background='#FDF0ED'; e.style.color='#A0503A'; } else { e.style.background=''; e.style.color='#4b5563'; }
+    const bb=e.querySelector('b'); if(bb) bb.style.color=(b===cur)?'#BE6148':'#6b7280'; });
+};
+window.upDisc = function(v){ const t=upTargets[upIdx]; upState[t.id].discipline=v;
+  const ok=document.getElementById('up-disc-ok'), no=document.getElementById('up-disc-no');
+  ok.style.borderColor=v===10?'#16a34a':'#e5e7eb'; ok.style.background=v===10?'#f0fdf4':'#fff';
+  no.style.borderColor=v===0?'#dc2626':'#e5e7eb'; no.style.background=v===0?'#fef2f2':'#fff';
+};
+window.saveUpwardReview = async function(){
+  const t=upTargets[upIdx], st=upState[t.id];
+  let weighted=0; const scores={};
+  KPI_ITEMS.forEach(it=>{ const v=(st.scores[it.key]!==undefined)?st.scores[it.key]:8; scores[it.key]=v; weighted+=v*it.weight*10; });
+  const named=upNamed();
+  const data={ scores, discipline:st.discipline, weightedScore:Math.round(weighted*10)/10, named, reviewerId:currentUser.id, ts:Date.now() };
+  if (named) data.reviewerName=currentUser.name;
+  try { await fbSet('upwardReviews/'+upYM()+'/'+t.id+'/'+currentUser.id, data); }
+  catch(e){ toast('送出失敗,請檢查網路','e'); return; }
+  st.done=true; toast('✓ 已送出對「'+t.name+'」的評核','s');
+  const next=upTargets.findIndex((x,i)=> i>upIdx && !upState[x.id].done);
+  if (next>=0){ upIdx=next; upRenderPicker(); upRenderItems(); }
+  else { upRenderPicker(); upRenderItems(); if (upTargets.every(x=>upState[x.id].done)) toast('本月評核全部完成,感謝!','s'); }
+};
+
 window.mgrCalcKpiScore = function(){
   let sum = 0;
   KPI_ITEMS.forEach(item => {
@@ -3367,6 +3475,126 @@ window.mgrCalcKpiScore = function(){
   });
   document.getElementById('mgr-kpi-modal-total').textContent = sum.toFixed(1);
   return sum;
+};
+
+/* ===== 下對上評核(員工評主管/領班/督導)— 增量一 ===== */
+var upwardTargets = [];
+var upwardCurIdx = 0;
+var upwardScores = {};
+var upwardDisc = {};
+
+function upwardPeriod(){
+  var now = new Date();
+  return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+}
+function upwardIsNamed(position){
+  return ['領班','組長','副店長','店長','督導'].indexOf(position) >= 0;
+}
+function upwardComputeTargets(){
+  var myStore = currentUser ? currentUser.storeId : null;
+  var LEAD = ['領班','組長','副店長','店長'];
+  var list = EMPLOYEES.filter(function(e){
+    return e.active !== false && e.id !== currentUser.id &&
+      ( e.position === '督導' || (LEAD.indexOf(e.position) >= 0 && e.storeId === myStore) );
+  });
+  list.sort(function(a,b){ return (a.position==='督導'?0:1) - (b.position==='督導'?0:1); });
+  return list;
+}
+window.openUpward = async function(){
+  if (!currentUser){ return; }
+  upwardTargets = upwardComputeTargets();
+  if (!upwardTargets.length){ toast('目前沒有需要你評核的對象', 's'); return; }
+  var ym = upwardPeriod();
+  var sub = document.getElementById('upward-top-sub');
+  if (sub) sub.textContent = ym.split('-')[0] + ' 年 ' + parseInt(ym.split('-')[1]) + ' 月';
+  document.getElementById('upward-overlay').style.display = 'flex';
+  var done = null;
+  try { done = await fbGet('upwardDone/' + ym + '/' + currentUser.id); } catch(e){}
+  if (done){
+    document.getElementById('upward-body').innerHTML = '<div style="text-align:center;padding:54px 20px"><div style="font-size:50px">✅</div><div style="font-size:16px;font-weight:800;color:#7D3D2C;margin-top:12px">你本月已完成主管評核</div><div style="font-size:13px;color:#6B7280;margin-top:6px">感謝你的回饋!</div></div>';
+    return;
+  }
+  upwardCurIdx = 0; upwardScores = {}; upwardDisc = {};
+  upwardRenderAll();
+};
+window.closeUpward = function(){ document.getElementById('upward-overlay').style.display = 'none'; };
+
+function upwardRenderAll(){
+  var me = EMPLOYEES.find(function(e){ return e.id === currentUser.id; }) || {};
+  var named = upwardIsNamed(me.position);
+  var idnote = named
+    ? '<div class="uw-idnote named">🪪 你的身分：' + (me.position||'') + ' → 評分將<b>具名</b>送出</div>'
+    : '<div class="uw-idnote anon">🔒 你的身分：' + (me.position||'正職') + ' → 評分將<b>匿名</b>送出,被評的人看不到是誰評的</div>';
+  var picker = '<div class="uw-picklbl">評核對象(本店領班以上 + 督導)</div><div class="uw-picker" id="upward-picker"></div>';
+  var items = '<div id="upward-items"></div>';
+  var disc = '<div class="uw-sectitle">自我紀律(獨立計分)</div><div class="uw-disc"><div class="uw-disc-head">紀律表現 <span>0 或 10 分</span></div><div class="uw-disc-body"><div class="uw-disc-opt" id="uw-disc-ok" onclick="upwardSetDisc(10)"><b>✅ 符合</b><span>無違紀 10 分</span></div><div class="uw-disc-opt" id="uw-disc-no" onclick="upwardSetDisc(0)"><b>⛔ 不符合</b><span>有違紀 0 分</span></div></div></div>';
+  var submit = '<button class="uw-submit" onclick="upwardSubmit()">📤 送出本月評核(全部對象)</button>';
+  document.getElementById('upward-body').innerHTML = idnote + picker + items + disc + submit;
+  upwardRenderPicker();
+  upwardRenderForm();
+}
+function upwardRenderPicker(){
+  var row = document.getElementById('upward-picker');
+  if (!row) return;
+  row.innerHTML = upwardTargets.map(function(t,i){
+    var filled = upwardScores[t.id] ? ' done' : '';
+    return '<div class="uw-pick' + (i===upwardCurIdx?' active':'') + '" onclick="upwardPick('+i+')"><div class="uw-pick-role">' + (t.position||'') + '</div><div class="uw-pick-name">' + t.name + '<span class="uw-dot'+filled+'"></span></div></div>';
+  }).join('');
+}
+window.upwardPick = function(i){ upwardCurIdx = i; upwardRenderPicker(); upwardRenderForm(); };
+function upwardBand(v){ return v<=2?'0-2':v<=5?'3-5':v<=8?'6-8':'9-10'; }
+function upwardRenderForm(){
+  var t = upwardTargets[upwardCurIdx];
+  if (!upwardScores[t.id]){ upwardScores[t.id] = {}; KPI_ITEMS.forEach(function(it){ upwardScores[t.id][it.key] = 8; }); }
+  if (upwardDisc[t.id] === undefined) upwardDisc[t.id] = 10;
+  var sc = upwardScores[t.id];
+  var html = '';
+  KPI_ITEMS.forEach(function(it){
+    var v = sc[it.key];
+    var cur = upwardBand(v);
+    var rubric = Object.entries(it.criteria).map(function(pair){
+      return '<div class="uw-rbl' + (pair[0]===cur?' on':'') + '" data-range="'+pair[0]+'"><span class="uw-bn">'+pair[0]+'</span>'+pair[1]+'</div>';
+    }).join('');
+    html += '<div class="uw-item"><div class="uw-item-name">'+it.name+'</div><div class="uw-item-row"><div class="uw-score" id="uw-sc-'+it.key+'">'+v+'</div><input class="uw-rng" type="range" min="0" max="10" step="1" value="'+v+'" oninput="upwardOnScore(\''+it.key+'\',this.value)"></div><div class="uw-rubric" id="uw-rb-'+it.key+'">'+rubric+'</div></div>';
+  });
+  document.getElementById('upward-items').innerHTML = html;
+  upwardSetDiscUI(upwardDisc[t.id]);
+}
+window.upwardOnScore = function(key, val){
+  val = parseInt(val);
+  var t = upwardTargets[upwardCurIdx];
+  upwardScores[t.id][key] = val;
+  var scEl = document.getElementById('uw-sc-'+key);
+  if (scEl) scEl.textContent = val;
+  var cur = upwardBand(val);
+  var wrap = document.getElementById('uw-rb-'+key);
+  if (wrap){ wrap.querySelectorAll('.uw-rbl').forEach(function(el){ el.classList.toggle('on', el.getAttribute('data-range')===cur); }); }
+};
+window.upwardSetDisc = function(v){ var t = upwardTargets[upwardCurIdx]; upwardDisc[t.id] = v; upwardSetDiscUI(v); };
+function upwardSetDiscUI(v){
+  var ok = document.getElementById('uw-disc-ok'), no = document.getElementById('uw-disc-no');
+  if (ok) ok.className = 'uw-disc-opt' + (v===10?' on-ok':'');
+  if (no) no.className = 'uw-disc-opt' + (v===0?' on-no':'');
+}
+window.upwardSubmit = async function(){
+  var me = EMPLOYEES.find(function(e){ return e.id === currentUser.id; }) || {};
+  var named = upwardIsNamed(me.position);
+  var ym = upwardPeriod();
+  try {
+    for (var k=0;k<upwardTargets.length;k++){
+      var t = upwardTargets[k];
+      var sc = upwardScores[t.id];
+      if (!sc){ sc = {}; KPI_ITEMS.forEach(function(it){ sc[it.key]=8; }); }
+      var sum = 0;
+      KPI_ITEMS.forEach(function(it){ sum += (sc[it.key]||0) * it.weight * 10; });
+      var rec = { scores: sc, discipline: (upwardDisc[t.id]!==undefined?upwardDisc[t.id]:10), weightedScore: Math.round(sum*100)/100, named: named, ts: Date.now() };
+      if (named){ rec.evaluatorName = currentUser.name; await fbSet('upwardReviews/'+ym+'/'+t.id+'/'+currentUser.id, rec); }
+      else { await fbPush('upwardReviews/'+ym+'/'+t.id, rec); }
+    }
+    await fbSet('upwardDone/'+ym+'/'+currentUser.id, { storeId: (currentUser.storeId||''), name: currentUser.name, ts: Date.now() });
+    toast('🎉 本月主管評核已送出,感謝!', 's');
+    setTimeout(closeUpward, 1200);
+  } catch(e){ toast('送出失敗,請重試', 'e'); }
 };
 
 window.mgrSaveKpi = async function(){
@@ -8775,5 +9003,49 @@ initApp().then(() => {
   </svg>
 </div>
 <div class="punch-confetti-wrap" id="punch-confetti"></div>
+<style>
+.uw-entry{margin:0 0 14px;padding:13px 15px;background:linear-gradient(135deg,#7D3D2C,#BE6148);color:#fff;border-radius:13px;font-size:14px;font-weight:800;cursor:pointer;text-align:center}
+.uw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:flex-end;justify-content:center}
+.uw-sheet{background:#fff;width:100%;max-width:480px;height:92vh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden}
+.uw-top{padding:14px 16px;background:linear-gradient(135deg,#5C2818,#A0503A);color:#fff;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.uw-top-l{font-size:16px;font-weight:800}.uw-top-s{font-size:12px;opacity:.85;margin-top:2px}
+.uw-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer;flex-shrink:0}
+.uw-body{flex:1;overflow-y:auto;padding:14px 14px 30px}
+.uw-idnote{border-radius:11px;padding:10px 13px;font-size:12.5px;font-weight:700;line-height:1.6;margin-bottom:12px}
+.uw-idnote.anon{background:#FDF0ED;color:#A0503A}.uw-idnote.named{background:#f0fdf4;color:#16a34a}
+.uw-picklbl{font-size:11px;font-weight:800;color:#9CA3AF;letter-spacing:.5px;margin-bottom:6px}
+.uw-picker{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px}
+.uw-pick{flex-shrink:0;padding:9px 13px;border:1.5px solid #E5E7EB;border-radius:11px;background:#fff;cursor:pointer;text-align:center;min-width:80px}
+.uw-pick.active{border-color:#BE6148;background:#FDF0ED}
+.uw-pick-role{font-size:10px;color:#6B7280;font-weight:700}.uw-pick.active .uw-pick-role{color:#BE6148}
+.uw-pick-name{font-size:13px;font-weight:800;margin-top:1px}
+.uw-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#D1D5DB;margin-left:4px}.uw-dot.done{background:#16a34a}
+.uw-item{padding:12px 0;border-bottom:1px solid #F3F4F6}
+.uw-item-name{font-size:13.5px;font-weight:800}
+.uw-item-row{display:flex;align-items:center;gap:10px;margin:9px 0}
+.uw-score{font-size:24px;font-weight:900;color:#BE6148;width:30px;text-align:center}
+.uw-rng{flex:1}
+.uw-rubric{border:1px solid #E5E7EB;border-radius:9px;overflow:hidden}
+.uw-rbl{font-size:11px;color:#4B5563;line-height:1.5;padding:6px 10px;border-top:1px solid #F3F4F6}
+.uw-rbl:first-child{border-top:none}
+.uw-bn{display:inline-block;font-weight:900;color:#6B7280;margin-right:7px;min-width:34px}
+.uw-rbl.on{background:#FDF0ED}.uw-rbl.on,.uw-rbl.on .uw-bn{color:#A0503A}
+.uw-sectitle{font-size:11px;font-weight:800;color:#9CA3AF;letter-spacing:.5px;margin:14px 0 6px}
+.uw-disc{border:1.5px solid #E5E7EB;border-radius:13px;overflow:hidden}
+.uw-disc-head{padding:10px 14px;background:#1f2937;color:#fff;font-size:12px;font-weight:800;display:flex;justify-content:space-between}.uw-disc-head span{font-weight:700;opacity:.7}
+.uw-disc-body{padding:13px 14px;display:flex;gap:8px}
+.uw-disc-opt{flex:1;padding:12px;border:1.5px solid #E5E7EB;border-radius:11px;text-align:center;cursor:pointer;background:#fff}
+.uw-disc-opt b{display:block;font-size:14px}.uw-disc-opt span{font-size:11px;color:#6B7280}
+.uw-disc-opt.on-ok{border-color:#16a34a;background:#f0fdf4}
+.uw-disc-opt.on-no{border-color:#dc2626;background:#fef2f2}
+.uw-submit{display:block;width:100%;margin-top:16px;padding:14px;border:none;border-radius:13px;background:linear-gradient(135deg,#A0503A,#BE6148);color:#fff;font-size:15px;font-weight:800;cursor:pointer}
+</style>
+<div class="uw-overlay" id="upward-overlay" style="display:none">
+  <div class="uw-sheet">
+    <div class="uw-top"><div><div class="uw-top-l">下對上評核</div><div class="uw-top-s" id="upward-top-sub"></div></div><button class="uw-close" onclick="closeUpward()">✕</button></div>
+    <div class="uw-body" id="upward-body"></div>
+  </div>
+</div>
+
 </body>
 </html>
