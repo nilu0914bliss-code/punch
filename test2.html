@@ -322,7 +322,7 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
       <div class="gps-detail" id="gps-detail">正在取得 GPS 位置</div>
     </div>
   </div>
-  <div class="uw-entry" id="uw-entry" onclick="openUpward()">📋 本月主管評核 · 點我填寫</div>
+  <div id="uw-entry-slot"></div>
   <div class="punch-grid">
     <button class="punch-btn in"  id="pb-in1"  onclick="openConfirm('IN1')"><span>🟢</span><span>上班打卡</span><span class="punch-btn-sub">第一段</span></button>
     <button class="punch-btn out" id="pb-out1" onclick="openConfirm('OUT1')"><span>🔵</span><span>下班打卡</span><span class="punch-btn-sub">第一段</span></button>
@@ -1540,6 +1540,7 @@ window.showEmpPage = function(id, idx) {
   const btn = document.getElementById('nav-e-' + idx);
   if (btn) btn.classList.add('active');
   if (id === 'pg-notice') loadNotice();
+  if (id === 'pg-clock' && typeof renderUwEntry === 'function') renderUwEntry();
 }
 window.showMgrPage = function(id, idx) {
   showPage(id);
@@ -3377,6 +3378,7 @@ var upwardTargets = [];
 var upwardCurIdx = 0;
 var upwardScores = {};
 var upwardDisc = {};
+var UPWARD_OPEN_DAY = 25;  // 每月 25 號起開放填寫,至月底
 
 function upwardPeriod(){
   var now = new Date();
@@ -3387,6 +3389,8 @@ function upwardDeadlineLabel(ym){
   var last = new Date(y, m, 0).getDate();
   return m + '/' + last;
 }
+function upwardWindowLabel(ym){ return UPWARD_OPEN_DAY + ' ~ ' + upwardDeadlineLabel(ym) + '（月底前）'; }
+function upwardIsOpen(){ return new Date().getDate() >= UPWARD_OPEN_DAY; }
 function upwardIsNamed(position){
   return ['領班','組長','副店長','店長','督導'].indexOf(position) >= 0;
 }
@@ -3400,8 +3404,22 @@ function upwardComputeTargets(){
   list.sort(function(a,b){ return (a.position==='督導'?0:1) - (b.position==='督導'?0:1); });
   return list;
 }
+function renderUwEntry(){
+  var slot = document.getElementById('uw-entry-slot');
+  if (!slot) return;
+  var ym = upwardPeriod();
+  if (upwardIsOpen()){
+    slot.innerHTML = '<div style="margin:0 0 4px;display:flex;justify-content:center"><div onclick="openUpward()" style="padding:9px 16px;background:#fff;border:1px solid #E5E7EB;border-radius:22px;font-size:13px;font-weight:800;color:#7D3D2C;display:flex;align-items:center;gap:8px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.06)"><span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block"></span>本月主管評核待填寫 →</div></div>'
+      + '<div style="text-align:center;font-size:11px;color:#9CA3AF;margin:0 0 12px;line-height:1.5">📅 本月開放中，請在月底（' + upwardDeadlineLabel(ym) + '）前完成評分</div>';
+  } else {
+    slot.innerHTML = '<div style="margin:0 0 4px;display:flex;justify-content:center"><div onclick="upwardNotOpenYet()" style="padding:9px 16px;background:#fff;border:1px solid #E5E7EB;border-radius:22px;font-size:13px;font-weight:700;color:#9CA3AF;display:flex;align-items:center;gap:8px;cursor:pointer"><span style="width:8px;height:8px;border-radius:50%;background:#D1D5DB;display:inline-block"></span>主管評核 · ' + UPWARD_OPEN_DAY + ' 號起開放</div></div>'
+      + '<div style="text-align:center;font-size:11px;color:#9CA3AF;margin:0 0 12px;line-height:1.5">📅 每月 ' + UPWARD_OPEN_DAY + ' 號 ~ 月底開放填寫,還沒到時間喔</div>';
+  }
+}
+window.upwardNotOpenYet = function(){ toast('主管評核每月 ' + UPWARD_OPEN_DAY + ' 號起開放,目前尚未開放', 's'); };
 window.openUpward = async function(){
   if (!currentUser){ return; }
+  if (!upwardIsOpen()){ toast('主管評核每月 ' + UPWARD_OPEN_DAY + ' 號起開放填寫', 's'); return; }
   var ym = upwardPeriod();
   var cfg = {};
   try { cfg = await fbGet('upwardConfig/' + ym) || {}; } catch(e){}
@@ -3424,7 +3442,7 @@ window.closeUpward = function(){ document.getElementById('upward-overlay').style
 function upwardRenderAll(){
   var me = EMPLOYEES.find(function(e){ return e.id === currentUser.id; }) || {};
   var named = upwardIsNamed(me.position);
-  var deadline = '<div style="background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:8px;padding:9px 12px;font-size:12px;color:#92400E;font-weight:700;margin-bottom:10px">📅 填寫截止：本月月底前（' + upwardDeadlineLabel(upwardPeriod()) + '）</div>';
+  var deadline = '<div style="background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:8px;padding:9px 12px;font-size:12px;color:#92400E;font-weight:700;margin-bottom:10px">📅 開放填寫：每月 ' + upwardWindowLabel(upwardPeriod()) + '</div>';
   var idnote = named
     ? '<div class="uw-idnote named">🪪 你的身分：' + (me.position||'') + ' → 評分將<b>具名</b>送出</div>'
     : '<div class="uw-idnote anon">🔒 你的身分：' + (me.position||'正職') + ' → 評分將<b>匿名</b>送出,被評的人看不到是誰評的</div>';
@@ -3499,6 +3517,8 @@ window.upwardSubmit = async function(){
     setTimeout(closeUpward, 1200);
   } catch(e){ toast('送出失敗,請重試', 'e'); }
 };
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderUwEntry);
+else renderUwEntry();
 
 window.mgrSaveKpi = async function(){
   if (!mgrKpiEmpId) return;
@@ -7019,7 +7039,7 @@ async function bossLoadUpward(){
   var subCount=scopeRaters.filter(function(e){ return doneIds[e.id]; }).length;
   var html='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
   html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">評核期間</div><div style="font-size:16px;font-weight:900;margin-top:2px">'+bossState.year+' 年 '+bossState.month+' 月</div></div>';
-  html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">填寫截止</div><div style="font-size:16px;font-weight:900;margin-top:2px;color:#b45309">月底前 '+upwardDeadlineLabel(ym)+'</div></div>';
+  html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">填寫期間</div><div style="font-size:16px;font-weight:900;margin-top:2px;color:#b45309">'+UPWARD_OPEN_DAY+' ~ '+upwardDeadlineLabel(ym)+'（月底）</div></div>';
   html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">已收件</div><div style="font-size:16px;font-weight:900;margin-top:2px;color:#BE6148">'+subCount+' / '+scopeRaters.length+' 人</div></div>';
   html+='</div>';
   html+='<div style="background:#FDF0ED;border-radius:11px;padding:11px 15px;margin-bottom:14px;font-size:12px;color:#7D3D2C;line-height:1.6">右側開關＝本月是否納入被評(關掉員工就不會評到他)。督導薪資公司另計,分數只在此顯示。</div>';
