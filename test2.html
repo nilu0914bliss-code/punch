@@ -6892,6 +6892,45 @@ async function renderStoreCompareTable(prefetched, allRev, kpiDataObj){
   document.getElementById('boss-dash-store-compare').innerHTML = html;
 }
 
+/* ===== PT 月平均工時 (特休頁顯示用) ===== */
+// 平均期間設定:'ytd'=今年至今每月平均 | 'last3'=最近3個月 | 'last6'=最近6個月
+// ⚠️ 平均期間待老闆確認後,改這一行即可
+var PT_AVG_MODE = 'ytd';
+function ptBuildMonthlyHours(allPunches){
+  var daily = {};
+  Object.values(allPunches || {}).forEach(function(p){
+    if(!p || !p.empId || !p.date) return;
+    var k = p.empId + '|' + p.date;
+    if(!daily[k]) daily[k] = {emp:p.empId, date:p.date};
+    daily[k][p.type] = p.calcTime;
+  });
+  var out = {};
+  Object.keys(daily).forEach(function(k){
+    var d = daily[k], h = 0;
+    if(d.IN1 && d.OUT1) h += (parseTime(d.OUT1) - parseTime(d.IN1)) / 3600;
+    if(d.IN2 && d.OUT2) h += (parseTime(d.OUT2) - parseTime(d.IN2)) / 3600;
+    if(h < 0) h = 0;
+    var ym = d.date.slice(0,7);
+    if(!out[d.emp]) out[d.emp] = {};
+    out[d.emp][ym] = (out[d.emp][ym] || 0) + h;
+  });
+  return out;
+}
+function ptAvgMonthlyHours(map, empId){
+  var m = (map || {})[empId] || {};
+  var now = new Date(), yr = now.getFullYear(), mo0 = now.getMonth();
+  var months = [];
+  if(PT_AVG_MODE === 'last3' || PT_AVG_MODE === 'last6'){
+    var n = PT_AVG_MODE === 'last3' ? 3 : 6;
+    for(var i=0;i<n;i++){ var d=new Date(yr, mo0 - i, 1); months.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')); }
+  } else {
+    for(var mm=1; mm<=mo0+1; mm++){ months.push(yr + '-' + String(mm).padStart(2,'0')); }
+  }
+  var sum = 0, cnt = 0;
+  months.forEach(function(ym){ if(m[ym] !== undefined){ sum += m[ym]; cnt++; } });
+  return cnt ? (sum / cnt) : null;
+}
+
 // ⭐ 特休管理
 async function bossLoadAnnual(){
   const emps = bossFilterEmps();
@@ -6902,16 +6941,21 @@ async function bossLoadAnnual(){
     return;
   }
   
-  // ⚡ 一次抓全部假單
-  const allLeaves = await fbGet('leaves') || {};
+  // ⚡ 一次抓全部假單 + 打卡 (打卡用來算 PT 月均工時)
+  const [_lv, _pun] = await Promise.all([fbGet('leaves'), fbGet('punches')]);
+  const allLeaves = _lv || {};
+  const ptMonthlyMap = ptBuildMonthlyHours(_pun || {});
   
-  let html = '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="background:#F9FAFB"><th style="padding:9px;text-align:left">姓名</th><th style="padding:9px">職階</th><th style="padding:9px">門市</th><th style="padding:9px">到職日</th><th style="padding:9px">年資</th><th style="padding:9px;text-align:right">年度天數</th><th style="padding:9px;text-align:right">已休</th><th style="padding:9px;text-align:right">剩餘</th><th style="padding:9px">週年到期日</th><th style="padding:9px;text-align:right">特休折現估算</th></tr></thead><tbody>';
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="background:#F9FAFB"><th style="padding:9px;text-align:left">姓名</th><th style="padding:9px">職階</th><th style="padding:9px">門市</th><th style="padding:9px">到職日</th><th style="padding:9px">年資</th><th style="padding:9px;text-align:right">月均工時<br><span style="font-weight:400;color:#9CA3AF">(PT)</span></th><th style="padding:9px;text-align:right">年度天數</th><th style="padding:9px;text-align:right">已休</th><th style="padding:9px;text-align:right">剩餘</th><th style="padding:9px">週年到期日</th><th style="padding:9px;text-align:right">特休折現估算</th></tr></thead><tbody>';
   
   emps.forEach(e => {
     const store = STORES.find(s => s.id === e.storeId);
     
     // ⭐ 用原版 calcAnnualDays (跟主管/員工頁面一致)
     const total = calcAnnualDays(e.hireDate || '');
+    const _isPT = getPositionInfo(e.position).type === 'hourly';
+    const _avgWH = _isPT ? ptAvgMonthlyHours(ptMonthlyMap, e.id) : null;
+    const _avgWHStr = (_avgWH != null) ? _avgWH.toFixed(1) + ' h' : '—';
     
     // 算年資文字
     let yearsStr = '—';
@@ -6967,6 +7011,7 @@ async function bossLoadAnnual(){
     html += '<td style="padding:9px">' + (store ? store.name : '—') + '</td>';
     html += '<td style="padding:9px">' + (e.hireDate || '—') + '</td>';
     html += '<td style="padding:9px">' + yearsStr + '</td>';
+    html += '<td style="padding:9px;text-align:right;color:' + (_avgWH!=null?'#7D3D2C':'#D1D5DB') + ';font-weight:' + (_avgWH!=null?'700':'400') + '">' + _avgWHStr + '</td>';
     html += '<td style="padding:9px;text-align:right">' + total + '</td>';
     html += '<td style="padding:9px;text-align:right">' + used.toFixed(1) + '</td>';
     html += '<td style="padding:9px;text-align:right;font-weight:700;color:' + (remaining > 0 ? '#10b981' : '#9CA3AF') + '">' + remaining.toFixed(1) + '</td>';
@@ -6975,6 +7020,7 @@ async function bossLoadAnnual(){
   });
   
   html += '</tbody></table>';
+  html += '<div style="font-size:11px;color:#9CA3AF;margin-top:8px;line-height:1.6">📌 月均工時:僅 PT 顯示,為「今年至今・每月平均打卡時數」(只計有打卡的月份)。平均期間與是否排除加班,待老闆確認後可一行調整。</div>';
   cont.innerHTML = html;
 }
 
