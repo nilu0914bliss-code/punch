@@ -764,6 +764,9 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
     <!-- ⭐ 新增:職階(算底薪/職務津貼) -->
     <div style="margin-bottom:8px"><div class="form-label" style="font-size:12px">職階 *</div>
       <select class="form-select" id="ne-position" style="padding:9px 11px;font-size:14px">
+        <optgroup label="督導（薪資公司另計）">
+          <option value="督導">督導</option>
+        </optgroup>
         <optgroup label="月薪制">
           <option value="店長">店長 (底薪34000 + 職務津貼10000)</option>
           <option value="副店長">副店長 (底薪34000 + 職務津貼8000)</option>
@@ -4599,7 +4602,7 @@ function renderEmpList() {
     card.appendChild(main);
     const editForm = document.createElement('div');
     editForm.className = 'emp-card-edit'; editForm.id = 'emp-edit-' + e.id;
-    const POSITIONS_LIST = ['店長','副店長','組長','領班','正職人員','實習正職','正職支援','PT196','PT200','PT230','PT235','PT240','PT250','PT300'];
+    const POSITIONS_LIST = ['督導','店長','副店長','組長','領班','正職人員','實習正職','正職支援','PT196','PT200','PT230','PT235','PT240','PT250','PT300'];
     const empPos = e.position || '正職人員';
     const positionOpts = POSITIONS_LIST.map(p => '<option value="' + p + '"' + (empPos===p?' selected':'') + '>' + p + '</option>').join('');
     const bdayVal = e.birthday ? ('2026-' + e.birthday) : '';
@@ -6081,6 +6084,7 @@ const POSITION_TABLE = {
   '正職人員': {baseSalary:34000, managerBonus:0, type:'monthly'},
   '實習正職': {baseSalary:34000, managerBonus:0, type:'monthly'},
   '正職支援': {baseSalary:34000, managerBonus:0, type:'monthly'},
+  '督導':   {baseSalary:0, managerBonus:0, type:'external'},  // 薪資由公司另計,不進系統
   'PT196': {hourly:196, type:'hourly'},
   'PT200': {hourly:200, type:'hourly'},
   'PT230': {hourly:230, type:'hourly'},
@@ -6232,12 +6236,14 @@ const POSITION_LABOR_RATE = {
   'PT196':254.8,'PT200':260.0,'PT230':299.0,'PT235':305.5,'PT240':312.0,'PT250':325.0,'PT300':390.0
 };
 function laborCostOf(emp, md){
+  if (emp.position === '督導') return 0;  // 督導不計入店人事成本
   const rate = POSITION_LABOR_RATE[emp.position] || POSITION_LABOR_RATE['正職人員'];
   const hours = (md.workHours||0) + (md.fullLeaveH||0) + (md.halfLeaveH||0)*0.5;
   return rate * hours;
 }
 // ⭐ 某店的人事成本:按「實際打卡的門市」分攤(跨店支援算給支援的店)
 function laborCostOfAtStore(emp, md, storeId){
+  if (emp.position === '督導') return 0;  // 督導不計入店人事成本
   if (storeId === 'all') return laborCostOf(emp, md);
   const rate = POSITION_LABOR_RATE[emp.position] || POSITION_LABOR_RATE['正職人員'];
   let hours = (md.storeHours && md.storeHours[storeId]) || 0;  // 在這間店打卡的時數
@@ -7180,6 +7186,7 @@ async function bossLoadPayroll(){
   const rows = [];
   const _payWH = await getMonthWH(bossState.year, bossState.month);
   for (const emp of emps){
+    if (emp.position === '督導') continue;  // 督導薪資公司另計,不進核對表
     const monthData = await aggregateEmployeeMonthData(emp.id, bossState.year, bossState.month, prefetched);
     monthData.standardHours = _payWH;
     // ⭐ 紀律分數從 KPI 自動帶
@@ -7505,7 +7512,7 @@ async function bossLoadEmpList(){
   let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">';
   html += '<colgroup><col style="width:6%"><col style="width:6%"><col style="width:13%"><col style="width:7%"><col style="width:12%"><col style="width:9%"><col style="width:7%"><col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:16%"></colgroup>';
   html += '<thead><tr style="background:#F9FAFB">';
-  const POS = ['店長','副店長','組長','領班','正職人員','實習正職','正職支援','PT196','PT200','PT230','PT235','PT240','PT250','PT300'];
+  const POS = ['督導','店長','副店長','組長','領班','正職人員','實習正職','正職支援','PT196','PT200','PT230','PT235','PT240','PT250','PT300'];
   html += '<th style="padding:9px;text-align:left">姓名</th>';
   html += '<th style="padding:9px;text-align:left">員工編號</th>';
   html += '<th style="padding:9px;text-align:left">門市</th>';
@@ -8182,7 +8189,7 @@ window.bossEditEmp = function(empId){
   document.getElementById('boss-emp-modal-name').textContent = emp.name + ' (' + emp.code + ')';
   
   // 職階下拉
-  const POSITIONS = ['店長','副店長','組長','領班','正職人員','實習正職','正職支援','PT196','PT200','PT230','PT235','PT240','PT250','PT300'];
+  const POSITIONS = ['督導','店長','副店長','組長','領班','正職人員','實習正職','正職支援','PT196','PT200','PT230','PT235','PT240','PT250','PT300'];
   const posSel = document.getElementById('boss-emp-modal-position');
   posSel.innerHTML = POSITIONS.map(p => '<option value="' + p + '"' + ((emp.position||'正職人員')===p?' selected':'') + '>' + p + '</option>').join('');
   
