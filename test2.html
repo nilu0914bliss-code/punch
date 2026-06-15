@@ -3349,8 +3349,8 @@ async function mgrRenderDiscBox(empId, yyyymm, savedDisc){
   if (!box) return;
 
   var punches = [], reviews = [];
-  try { punches = (await fbQueryByEmp('punches', empId)) || []; } catch(e){}
-  try { reviews = (await fbQueryByEmp('reviews', empId)) || []; } catch(e){}
+  try { var _p = await fbQueryByEmp('punches', empId); punches = _p ? Object.values(_p) : []; } catch(e){}
+  try { var _r = await fbQueryByEmp('reviews', empId); reviews = _r ? Object.values(_r) : []; } catch(e){}
 
   var lateMins = 0, lateCount = 0;
   reviews.forEach(function(r){
