@@ -3307,6 +3307,81 @@ window.mgrToggleKpiCriteria = function(key){
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 };
 
+/* ===== 紀律鼓勵金審核(上對下 KPI 評分畫面內)===== */
+async function mgrRenderDiscBox(empId, yyyymm, savedDisc){
+  var box = document.getElementById('mgr-kpi-disc-box');
+  if (!box) return;
+
+  var punches = [], reviews = [];
+  try { punches = (await fbQueryByEmp('punches', empId)) || []; } catch(e){}
+  try { reviews = (await fbQueryByEmp('reviews', empId)) || []; } catch(e){}
+
+  var lateMins = 0, lateCount = 0;
+  reviews.forEach(function(r){
+    if (r && r.date && r.date.indexOf(yyyymm) === 0 && (r.lateMins||0) > 0){ lateMins += r.lateMins; lateCount++; }
+  });
+  var patches = punches.filter(function(p){ return p && p.isPatch && p.date && p.date.indexOf(yyyymm) === 0; });
+  patches.sort(function(a,b){ return (a.date+(a.type||'')).localeCompare(b.date+(b.type||'')); });
+
+  var lateOver = (lateMins >= 11 || lateCount >= 4);
+  var hasSignal = (lateMins > 0 || lateCount > 0 || patches.length > 0);
+  // 有狀況的人:強制主管選(預設不選);乾淨的人:預設符合
+  var disc = (savedDisc !== undefined && savedDisc !== null) ? savedDisc : (hasSignal ? '' : 10);
+
+  var h = '<div style="border:2px solid #FDE68A;border-radius:11px;overflow:hidden">';
+  h += '<div style="background:#FFFBEB;padding:9px 12px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:13.5px;font-weight:800;color:#7D3D2C">🏅 紀律鼓勵金</span><span style="font-size:12px;font-weight:800;color:#D97706">$1,500</span></div>';
+
+  if (!hasSignal){
+    h += '<div style="padding:10px 12px"><div style="background:#DCFCE7;border:1px solid #86efac;border-radius:8px;padding:9px 11px;font-size:12px;color:#166534;font-weight:700">✅ 本月無紀律異常(無遲到、無補打卡)</div></div>';
+  } else {
+    h += '<div style="padding:8px 12px;border-top:1px solid #FEF3C7"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12.5px;font-weight:700">遲到</span><span style="font-size:12px;color:#4B5563">' + lateMins + ' 分 · ' + lateCount + ' 次 ';
+    h += lateOver ? '<span style="background:#FEE2E2;color:#dc2626;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:20px;margin-left:4px">超標</span>' : '<span style="background:#DCFCE7;color:#166534;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:20px;margin-left:4px">正常</span>';
+    h += '</span></div>' + (lateOver ? '<div style="font-size:10.5px;color:#9CA3AF;margin-top:3px">自動判定:累計 ≥11 分 或 ≥4 次 → 不符合</div>' : '') + '</div>';
+
+    h += '<div style="padding:8px 12px;border-top:1px solid #FEF3C7"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12.5px;font-weight:700">補打卡</span><span style="font-size:12px;color:#4B5563">' + patches.length + ' 次</span></div>';
+    if (patches.length){
+      h += '<div style="margin-top:6px;background:#fff;border:1px solid #FDE68A;border-radius:7px;padding:6px 9px">';
+      patches.forEach(function(p){
+        var md = (p.date||'').slice(5).replace('-','/');
+        var rs = p.patchReason || p.reason || '(未填原因)';
+        h += '<div style="font-size:11px;color:#4B5563;padding:4px 0;border-bottom:1px dashed #FDE68A;line-height:1.5"><b style="color:#7D3D2C">' + md + '</b> <span style="font-size:9.5px;background:#FFFBEB;border:1px solid #FDE68A;color:#D97706;border-radius:4px;padding:0 5px;margin:0 5px">' + (p.type||'') + '</span>' + rs + '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+
+    h += '<div style="padding:8px 12px;border-top:1px solid #FEF3C7"><div id="mgr-disc-leave" data-on="0" onclick="mgrToggleEarlyLeave()" style="display:flex;align-items:center;gap:9px;cursor:pointer"><div id="mgr-disc-leave-box" style="width:18px;height:18px;border:2px solid #D1D5DB;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;flex-shrink:0"></div><div><div style="font-size:12.5px;font-weight:700">未經主管同意私自早退／曠職</div><div style="font-size:10.5px;color:#9CA3AF;margin-top:2px">主管勾選(系統判不到)</div></div></div></div>';
+  }
+
+  h += '<div style="padding:11px 12px;border-top:1px solid #FEF3C7;background:#FFFBEB">';
+  h += '<div style="font-size:12px;font-weight:800;color:#7D3D2C;margin-bottom:8px">紀律鼓勵金 → 主管最終決定</div>';
+  h += '<div style="display:flex;gap:8px"><button type="button" id="mgr-disc-ok" onclick="mgrSetDisc(10)" style="flex:1;padding:9px;border-radius:8px;border:2px solid #E5E7EB;background:#fff;font-size:12.5px;font-weight:800;color:#6B7280;cursor:pointer">✅ 符合・發放 $1,500</button>';
+  h += '<button type="button" id="mgr-disc-no" onclick="mgrSetDisc(0)" style="flex:1;padding:9px;border-radius:8px;border:2px solid #E5E7EB;background:#fff;font-size:12.5px;font-weight:800;color:#6B7280;cursor:pointer">⛔ 不符合・不予發放</button></div>';
+  if (disc === '') h += '<div style="font-size:10.5px;color:#dc2626;margin-top:8px;font-weight:700;background:#FEE2E2;border-radius:6px;padding:6px 9px;line-height:1.5">⚠️ 此員工本月有狀況,請務必選擇「符合」或「不符合」才能儲存</div>';
+  if (lateOver) h += '<div style="font-size:10.5px;color:#D97706;margin-top:8px;background:#FEF3C7;border-radius:6px;padding:6px 9px;line-height:1.5">💡 系統建議:遲到超標 → 建議「不符合」(主管可覆蓋)</div>';
+  h += '</div></div>';
+
+  box.innerHTML = h;
+  mgrSetDisc(disc);
+}
+function mgrSetDisc(v){
+  var hidden = document.getElementById('mgr-kpi-discipline');
+  if (hidden) hidden.value = v;
+  var ok = document.getElementById('mgr-disc-ok'), no = document.getElementById('mgr-disc-no');
+  if (ok){ ok.style.background = v===10?'#10b981':'#fff'; ok.style.borderColor = v===10?'#10b981':'#E5E7EB'; ok.style.color = v===10?'#fff':'#6B7280'; }
+  if (no){ no.style.background = v===0?'#dc2626':'#fff'; no.style.borderColor = v===0?'#dc2626':'#E5E7EB'; no.style.color = v===0?'#fff':'#6B7280'; }
+}
+function mgrToggleEarlyLeave(){
+  var el = document.getElementById('mgr-disc-leave'); if(!el) return;
+  var on = el.getAttribute('data-on') !== '1';
+  el.setAttribute('data-on', on?'1':'0');
+  var box = document.getElementById('mgr-disc-leave-box');
+  box.textContent = on ? '✓' : '';
+  box.style.background = on ? '#dc2626' : '#fff';
+  box.style.borderColor = on ? '#dc2626' : '#D1D5DB';
+  if (on) mgrSetDisc(0);
+}
+
 window.mgrOpenKpi = async function(empId){
   mgrKpiEmpId = empId;
   const emp = EMPLOYEES.find(e => e.id === empId);
@@ -3349,7 +3424,7 @@ window.mgrOpenKpi = async function(empId){
   itemsCont.innerHTML = html;
   
   // 紀律
-  document.getElementById('mgr-kpi-discipline').value = existing.discipline !== undefined ? existing.discipline : 10;
+  await mgrRenderDiscBox(empId, yyyymm, existing.discipline);
   
   // 評語
   const c = existing.comments || {};
@@ -3524,13 +3599,22 @@ window.mgrSaveKpi = async function(){
   if (!mgrKpiEmpId) return;
   
   const scores = {};
+  const _missing = [];
   KPI_ITEMS.forEach(item => {
-    scores[item.key] = parseFloat(document.getElementById('mgr-kpi-' + item.key).value) || 0;
+    const _el = document.getElementById('mgr-kpi-' + item.key);
+    const _blank = !_el || _el.value.trim() === '';
+    if (_el) _el.style.borderColor = _blank ? '#dc2626' : '#D1D5DB';
+    if (_blank) _missing.push(item.name);
+    else scores[item.key] = parseFloat(_el.value) || 0;
   });
+  if (_missing.length){
+    toast('⚠️ 還有 ' + _missing.length + ' 項未評分,請全部填完才能儲存:' + _missing.join('、'), 'd');
+    return;
+  }
   
   const discipline = parseInt(document.getElementById('mgr-kpi-discipline').value);
   if (discipline !== 0 && discipline !== 10){
-    toast('紀律分數只能是 0 或 10', 'd');
+    toast('⚠️ 這位員工本月有遲到或補打卡,請先確認紀律鼓勵金:點「符合」或「不符合」', 'd');
     return;
   }
   
@@ -3629,7 +3713,9 @@ async function renderMySalary(){
   const emp = EMPLOYEES.find(e => e.id === currentUser.id) || currentUser;
   const monthData = await aggregateEmployeeMonthData(emp.id, salYear, salMonth);
   monthData.standardHours = await getMonthWH(salYear, salMonth);
-  monthData.disciplineScore = 10;  // TODO: 從 KPI 抓
+  const _selfYm = salYear + '-' + String(salMonth).padStart(2,'0');
+  const _selfKpi = await fbGet('kpi/' + _selfYm + '/' + emp.id) || {};
+  monthData.disciplineScore = _selfKpi.discipline !== undefined ? _selfKpi.discipline : 10;
   monthData.isBirthdayMonth = isBirthdayThisMonth(emp.birthday, salYear, salMonth);
   
   // 套用老闆改過的黃格
@@ -9065,12 +9151,8 @@ initApp().then(() => {
     <div style="padding:14px 16px">
       <div style="background:#FEF9E7;border-left:3px solid #F59E0B;padding:8px 11px;border-radius:6px;font-size:11px;color:#374151;margin-bottom:11px;line-height:1.6">每項 0-10 分(可 0.5)。連續 3 個月加權總分 ≥ 90 享優先晉升。</div>
       <div id="mgr-kpi-modal-items" onchange="mgrCalcKpiScore()" oninput="mgrCalcKpiScore()"></div>
-      <div style="margin-top:11px;padding:9px;background:#F9FAFB;border-radius:8px">
-        <div style="display:grid;grid-template-columns:1fr 90px;gap:8px;align-items:center">
-          <div><div style="font-size:13px;font-weight:700;color:#7D3D2C">紀律分數 (獨立)</div><div style="font-size:10px;color:#9CA3AF">滿分 10、違規 0 (出勤違規 3 次+、遲到累計 10 分+、私自早退/曠職)</div></div>
-          <select id="mgr-kpi-discipline" style="width:100%;padding:7px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;text-align:center;box-sizing:border-box"><option value="10">10 分</option><option value="0">0 分</option></select>
-        </div>
-      </div>
+      <input type="hidden" id="mgr-kpi-discipline" value="">
+      <div id="mgr-kpi-disc-box" style="margin-top:12px"></div>
       <div style="margin-top:11px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">優點</div><textarea id="mgr-kpi-strengths" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
       <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">缺點</div><textarea id="mgr-kpi-weaknesses" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
       <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">協助方式 & 人員進程規劃</div><textarea id="mgr-kpi-suggestions" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
