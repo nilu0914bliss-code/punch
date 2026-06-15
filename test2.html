@@ -571,11 +571,12 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
   <div class="divider" style="margin-top:4px"></div>
   <div class="sec" style="padding-top:12px">
     <div onclick="toggleMgrKpi()" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;cursor:pointer">
-      <div class="sec-title" style="margin-bottom:0">⭐ 上月 KPI 評分 <span id="mgr-kpi-caret" style="font-size:12px;color:#9CA3AF">▸</span></div>
+      <div class="sec-title" style="margin-bottom:0">⭐ KPI 評分 <span id="mgr-kpi-caret" style="font-size:12px;color:#9CA3AF">▸</span></div>
       <div id="mgr-kpi-progress" style="font-size:11px;color:var(--g5)"></div>
     </div>
   </div>
   <div id="mgr-kpi-deadline-banner" style="display:none;margin:0 14px 9px;padding:11px 13px;border-radius:9px;font-size:12px;line-height:1.6"></div>
+  <div id="mgr-kpi-monthbar" style="display:none;padding:0 14px 10px"><div style="display:flex;align-items:center;gap:8px;background:#FDF0ED;border-radius:9px;padding:9px 12px"><span style="font-size:12px;font-weight:700;color:#7D3D2C;white-space:nowrap">評核月份</span><select id="mgr-kpi-month" onchange="mgrChangeKpiMonth(this.value)" style="flex:1;padding:7px 10px;border:1.5px solid #E5D0C8;border-radius:7px;font-size:13px;font-weight:700;color:#7D3D2C;background:#fff"></select></div></div>
   <div id="mgr-kpi-list" style="padding:0 14px 14px;display:none"></div>
 
 </div>
@@ -3172,8 +3173,36 @@ window.toggleMgrKpi = function(){
   if (!box) return;
   const open = (box.style.display === 'none');
   box.style.display = open ? 'block' : 'none';
+  const mb = document.getElementById('mgr-kpi-monthbar');
+  if (mb) mb.style.display = open ? 'block' : 'none';
   if (caret) caret.textContent = open ? '▾' : '▸';
 };
+
+/* ===== KPI 評核月份選擇 ===== */
+var mgrKpiSelMonth = null; // null = 預設上月
+function mgrDefaultKpiYm(){
+  var now = new Date();
+  var y = now.getFullYear(), m = now.getMonth(); // 0-indexed 當月 = 1-indexed 上月
+  if (m === 0){ m = 12; y--; }
+  return y + '-' + String(m).padStart(2,'0');
+}
+function mgrGetKpiYm(){ return mgrKpiSelMonth || mgrDefaultKpiYm(); }
+function mgrPopulateKpiMonths(){
+  var sel = document.getElementById('mgr-kpi-month');
+  if (!sel) return;
+  var cur = mgrGetKpiYm();
+  var now = new Date();
+  var opts = '';
+  for (var i = 0; i < 13; i++){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2,'0');
+    var tag = (i === 0 ? '(當月)' : (i === 1 ? '(上月)' : ''));
+    var label = d.getFullYear() + '年 ' + (d.getMonth() + 1) + ' 月' + tag;
+    opts += '<option value="' + ym + '"' + (ym === cur ? ' selected' : '') + '>' + label + '</option>';
+  }
+  sel.innerHTML = opts;
+}
+window.mgrChangeKpiMonth = function(ym){ mgrKpiSelMonth = ym; mgrLoadKpiList(); };
 
 window.mgrLoadKpiList = async function(){
   const storeId = getActiveStoreId();
@@ -3188,12 +3217,12 @@ window.mgrLoadKpiList = async function(){
     return;
   }
   
-  // ⭐ KPI 是評「上個月」的 (因為要算上月薪資)
+  // ⭐ KPI 評核月份 (預設上月,可由主管選)
   const now = new Date();
-  let kpiYear = now.getFullYear();
-  let kpiMonth = now.getMonth(); // 0-indexed = 上月
-  if (kpiMonth === 0){ kpiMonth = 12; kpiYear--; }
-  const yyyymm = kpiYear + '-' + String(kpiMonth).padStart(2,'0');
+  mgrPopulateKpiMonths();
+  const yyyymm = mgrGetKpiYm();
+  const kpiYear = parseInt(yyyymm.split('-')[0]);
+  const kpiMonth = parseInt(yyyymm.split('-')[1]);
   const kpiData = await fbGet('kpi/' + yyyymm) || {};
   
   const reviewed = emps.filter(e => kpiData[e.id]).length;
@@ -3204,7 +3233,14 @@ window.mgrLoadKpiList = async function(){
   if (banner){
     const today = now.getDate();
     const pending = emps.length - reviewed;
-    if (pending === 0){
+    const isDefaultMonth = (yyyymm === mgrDefaultKpiYm());
+    if (!isDefaultMonth){
+      banner.style.background = '#EFF6FF';
+      banner.style.color = '#1e40af';
+      banner.style.border = '1px solid #93c5fd';
+      banner.innerHTML = '📅 <b>檢視 ' + kpiYear + '/' + kpiMonth + ' 月 KPI</b>(非當期,可補評)· ' + reviewed + ' / ' + emps.length + ' 已評';
+      banner.style.display = 'block';
+    } else if (pending === 0){
       banner.style.background = '#D1FAE5';
       banner.style.color = '#065f46';
       banner.style.border = '1px solid #10b981';
@@ -3387,15 +3423,13 @@ window.mgrOpenKpi = async function(empId){
   const emp = EMPLOYEES.find(e => e.id === empId);
   if (!emp) return;
   
-  // ⭐ KPI 是評上月的
-  const now = new Date();
-  let kpiYear = now.getFullYear();
-  let kpiMonth = now.getMonth();
-  if (kpiMonth === 0){ kpiMonth = 12; kpiYear--; }
+  // ⭐ KPI 評核月份 (跟著主管選的月)
+  const yyyymm = mgrGetKpiYm();
+  const kpiYear = parseInt(yyyymm.split('-')[0]);
+  const kpiMonth = parseInt(yyyymm.split('-')[1]);
   
   document.getElementById('mgr-kpi-modal-name').textContent = emp.name + ' · ' + (emp.position || '—') + ' · 評 ' + kpiYear + '/' + kpiMonth + '月';
   
-  const yyyymm = kpiYear + '-' + String(kpiMonth).padStart(2,'0');
   const existing = await fbGet('kpi/' + yyyymm + '/' + empId) || {};
   
   // 8 項評分 (含評分標準說明)
@@ -3634,11 +3668,7 @@ window.mgrSaveKpi = async function(){
     reviewedAt: new Date().toISOString()
   };
   
-  const now = new Date();
-  let kpiYear = now.getFullYear();
-  let kpiMonth = now.getMonth();
-  if (kpiMonth === 0){ kpiMonth = 12; kpiYear--; }
-  const yyyymm = kpiYear + '-' + String(kpiMonth).padStart(2,'0');
+  const yyyymm = mgrGetKpiYm();
   await fbSet('kpi/' + yyyymm + '/' + mgrKpiEmpId, data);
   
   document.getElementById('mgr-kpi-modal').style.display = 'none';
@@ -6404,7 +6434,7 @@ function calculateSalary(emp, monthData){
   // PT/支援 = 0,整月空白也 = 0
   let attendanceBonus = 0;
   if (!isPTorSupport(emp.position) && !isInactive){
-    const missH = halfL + (noneL - familyH) + lateH;  // 傷病+生理+事假+遲到(家庭照顧假不扣)
+    const missH = halfL + (noneL - familyH);  // 傷病+生理+事假(遲到改算紀律、不扣出勤;家庭照顧假不扣)
     attendanceBonus = Math.round(1500 - (1500 / sh) * missH);
     if (attendanceBonus < 0) attendanceBonus = 0;
   }
