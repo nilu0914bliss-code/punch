@@ -8159,7 +8159,8 @@ async function bossLoadEmpList(){
     // 身分證 (直接改)
     html += '<td style="padding:6px;text-align:center"><input value="'+(e.idNumber||'')+'" placeholder="—" onchange="bossInlineUpdate(\''+e.id+'\',\'idNumber\',this,\'upper\')" style="width:100%;box-sizing:border-box;padding:5px 3px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:11px;text-transform:uppercase;text-align:center"></td>';
     // 健保級距 (數字直接改;會自動算勞健保自付)
-    html += '<td style="padding:6px;text-align:right"><input type="number" value="'+(e.healthGrade||'')+'" placeholder="—" onchange="bossInlineUpdate(\''+e.id+'\',\'healthGrade\',this,\'int\')" style="width:100%;box-sizing:border-box;padding:5px 3px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:11.5px;text-align:right"></td>';
+    var _autoGrade = posInsuranceGrade(e.position) || '';
+    html += '<td style="padding:6px;text-align:right"><input type="number" value="'+(e.healthGrade||'')+'" placeholder="'+(_autoGrade||'—')+'" title="'+(e.healthGrade?'手動指定':(_autoGrade?'依職階自動帶 '+_autoGrade:'未設定'))+'" onchange="bossInlineUpdate(\''+e.id+'\',\'healthGrade\',this,\'int\')" style="width:100%;box-sizing:border-box;padding:5px 3px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:11.5px;text-align:right;'+(e.healthGrade?'':'color:#9CA3AF')+'"></td>';
     // 密碼 (直接改;superadmin 不開放)
     if (e.role === 'superadmin'){
       html += '<td style="padding:9px;text-align:center;color:#9CA3AF">—</td>';
