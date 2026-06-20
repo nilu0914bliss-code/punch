@@ -3736,23 +3736,34 @@ async function renderMySalary(){
   const sec = document.getElementById('mymonth-salary-section');
   if (!currentUser) return;
   
-  // 預設顯示「上月」薪資 (本月還沒結束,不會結算)
+  // ⭐ 可選月份:預設上月,員工可往前選近 12 個月
   const now = new Date();
-  let salYear = now.getFullYear();
-  let salMonth = now.getMonth();  // 0-indexed = 上個月
-  if (salMonth === 0){ salMonth = 12; salYear--; }
-  
-  const yyyymm = salYear + '-' + String(salMonth).padStart(2,'0');
-  
+  let dY = now.getFullYear(), dM = now.getMonth();  // 0-indexed = 上個月
+  if (dM === 0){ dM = 12; dY--; }
+  const defYm = dY + '-' + String(dM).padStart(2,'0');
+  const selYm = window.mySalarySelYm || defYm;
+  // 月份下拉(近 12 個月,從上月往前)
+  let _mopts = '';
+  for (let _i = 1; _i <= 12; _i++){
+    const _d = new Date(now.getFullYear(), now.getMonth() - _i, 1);
+    const _y = _d.getFullYear(), _m = _d.getMonth() + 1;
+    const _v = _y + '-' + String(_m).padStart(2,'0');
+    _mopts += '<option value="' + _v + '"' + (_v === selYm ? ' selected' : '') + '>' + _y + '年 ' + _m + '月</option>';
+  }
+  const picker = '<div style="background:#fff;border:1.5px solid #BE6148;border-radius:12px;padding:10px 13px;margin-bottom:12px;display:flex;align-items:center;gap:10px"><span style="font-size:13px;font-weight:800;color:#7D3D2C;white-space:nowrap">查看月份</span><select onchange="window.mySalarySelYm=this.value;renderMySalary()" style="flex:1;padding:9px 11px;border:1px solid #E5E7EB;border-radius:9px;font-size:14px;font-weight:700;color:#374151;font-family:inherit;background:#FCFCFD">' + _mopts + '</select></div>';
+
+  const salYear = parseInt(selYm.split('-')[0]);
+  const salMonth = parseInt(selYm.split('-')[1]);
+  const yyyymm = selYm;
+
   // 檢查是否已結算
   const savedSalaries = await fbGet('salaries/' + yyyymm) || {};
   const isSettled = !!(savedSalaries.__settled);
-  
-  // 檢查是否到了 10 號開放日
-  const today = now.getDate();
-  const openDay = 10;
-  const isOpenDay = today >= openDay;
-  
+
+  // ⭐ 開放日:該月的「下個月 10 號」起開放(salMonth 為1-indexed,等於下月的0-indexed),舊月份自然都已開放
+  const openDate = new Date(salYear, salMonth, 10);
+  const isOpenDay = now >= openDate;
+
   if (!isSettled || !isOpenDay){
     // 鎖定畫面
     let reason = '';
@@ -3760,7 +3771,7 @@ async function renderMySalary(){
     else if (!isSettled) reason = '老闆尚未確認結算';
     else if (!isOpenDay) reason = '尚未到開放日 (每月 10 號開放上月薪資)';
     
-    sec.innerHTML = '<div style="background:#fff;border-radius:14px;padding:30px 20px;text-align:center"><div style="font-size:42px;margin-bottom:11px">🔒</div><div style="font-size:16px;font-weight:800;color:#7D3D2C;margin-bottom:6px">' + salYear + '年 ' + salMonth + '月 薪資結算中</div><div style="font-size:13px;color:#6B7280;line-height:1.7">' + reason + '</div><div style="background:#FEF9E7;border-left:3px solid #F59E0B;padding:11px 13px;border-radius:8px;margin-top:14px;font-size:11.5px;color:#374151;text-align:left;line-height:1.7"><b>結算流程:</b><br>① 主管 3 號前完成 KPI 評分<br>② 老闆 10 號前完成核薪<br>③ 老闆按「確認結算」<br>④ 10 號當天自動開放查看</div></div>';
+    sec.innerHTML = picker + '<div style="background:#fff;border-radius:14px;padding:30px 20px;text-align:center"><div style="font-size:42px;margin-bottom:11px">🔒</div><div style="font-size:16px;font-weight:800;color:#7D3D2C;margin-bottom:6px">' + salYear + '年 ' + salMonth + '月 薪資結算中</div><div style="font-size:13px;color:#6B7280;line-height:1.7">' + reason + '</div><div style="background:#FEF9E7;border-left:3px solid #F59E0B;padding:11px 13px;border-radius:8px;margin-top:14px;font-size:11.5px;color:#374151;text-align:left;line-height:1.7"><b>結算流程:</b><br>① 主管 3 號前完成 KPI 評分<br>② 老闆 10 號前完成核薪<br>③ 老闆按「確認結算」<br>④ 10 號當天自動開放查看</div></div>';
     return;
   }
   
@@ -3878,7 +3889,7 @@ async function renderMySalary(){
   
   html += '<div style="background:#F9FAFB;border-radius:9px;padding:9px 11px;font-size:11px;color:#6B7280;line-height:1.6;margin-top:8px">薪資若有疑問,請洽老闆或主管。系統公式依規格文件 v1.0 計算。</div>';
   
-  sec.innerHTML = html;
+  sec.innerHTML = picker + html;
 }
 
 // ── Review ──
@@ -7384,7 +7395,14 @@ async function bossLoadUpward(){
       var submitted=raters.filter(function(e){ return rNode[e.id]; });
       var missing=raters.filter(function(e){ return !rNode[e.id]; });
       html+='<div style="padding:10px 15px;background:#FCFBFA;border-top:1px dashed #E5E7EB;font-size:12px;font-weight:700;color:#4B5563">\ud83d\udcdd 全公司評分進度 '+submitted.length+'/'+raters.length;
-      if(missing.length){ var _mn=missing.slice(0,8).map(function(e){return e.name;}).join('、'); html+=' · <span style="color:#dc2626">未交 '+missing.length+' 人：</span>'+_mn+(missing.length>8?' …等':''); }
+      if(missing.length){
+        if(missing.length>10){
+          var _all=missing.map(function(e){return e.name;}).join('、');
+          html+=' · <details style="display:inline-block;vertical-align:top"><summary style="cursor:pointer;color:#dc2626;font-weight:700;list-style:none">未交 '+missing.length+' 人 ▸（點開看名單）</summary><div style="margin-top:6px;font-weight:500;color:#7f1d1d;line-height:1.9;max-width:560px">'+_all+'</div></details>';
+        } else {
+          html+=' · <span style="color:#dc2626">未交 '+missing.length+' 人：</span>'+missing.map(function(e){return e.name;}).join('、');
+        }
+      }
       else { html+=' · <span style="color:#16a34a">全員已交</span>'; }
       html+='</div>';
     });
