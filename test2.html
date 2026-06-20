@@ -6453,7 +6453,7 @@ function insGradePanel(){
   var g = INSURANCE_GRADES;
   return '<div style="background:#fff;border-radius:12px;padding:13px 15px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:14px;border-left:4px solid #BE6148">'
     +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:3px"><span style="font-size:14px;font-weight:800">🛡️ 健保級距主設定</span><span style="font-size:10px;font-weight:700;background:#E0F2FE;color:#0c4a6e;padding:2px 8px;border-radius:20px">老闆專屬</span></div>'
-    +'<div style="font-size:11px;color:#6B7280;margin-bottom:11px">選職階時自動帶這裡的數字;法規調整改這裡按儲存即可,會套用到所有未手動修改的員工。</div>'
+    +'<div style="font-size:11px;color:#6B7280;margin-bottom:11px">選職階時自動帶這裡的數字。法規調整改這裡按儲存即可;若有人手動填過級距,存檔時會問你要不要連他們一起更新。</div>'
     +'<div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px">'
     +'<div><div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">PT</div><input type="number" id="ig-pt" value="'+g.pt+'" style="width:108px;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;font-weight:700"></div>'
     +'<div><div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">正職</div><input type="number" id="ig-reg" value="'+g.regular+'" style="width:108px;padding:8px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;font-weight:700"></div>'
@@ -6478,7 +6478,21 @@ window.saveInsuranceGrades = async function(){
   INSURANCE_GRADES.pt = pt; INSURANCE_GRADES.regular = reg; INSURANCE_GRADES.manager = mgr;
   try { await fbSet('settings/insuranceGrades', {pt:pt, regular:reg, manager:mgr}); }
   catch(e){ toast('儲存失敗,請重試','e'); return; }
-  toast('健保級距主設定已儲存,已套用至所有未手動修改的員工','s');
+  // 找出「手動填過健保級距」的人(這些預設不會跟著主設定變)
+  var manualEmps = EMPLOYEES.filter(function(e){ return e.healthGrade !== undefined && e.healthGrade !== '' && e.healthGrade !== null && Number(e.healthGrade) > 0; });
+  if (manualEmps.length){
+    var names = manualEmps.slice(0,6).map(function(e){return e.name;}).join('、') + (manualEmps.length>6?' 等':'');
+    if (confirm('主設定已存。\n\n有 ' + manualEmps.length + ' 位是「手動填過健保級距」的(' + names + '),預設不會跟著變。\n\n要把他們也一起改成「依職階自動帶新級距」嗎?\n(他們現在手填的數字會被清掉,改吃主設定的值)')){
+      var updates = {};
+      manualEmps.forEach(function(e){ updates['employees/' + e.id + '/healthGrade'] = null; });
+      try { await fbUpdate('', updates); manualEmps.forEach(function(e){ e.healthGrade = ''; }); toast('已把 ' + manualEmps.length + ' 位改為自動帶新級距','s'); }
+      catch(e2){ toast('部分更新失敗,請重試','e'); }
+    } else {
+      toast('主設定已儲存(手動填過的維持原值)','s');
+    }
+  } else {
+    toast('健保級距主設定已儲存','s');
+  }
   if (typeof bossLoadEmpList === 'function') bossLoadEmpList();
 };
 function posInsuranceGrade(position){
