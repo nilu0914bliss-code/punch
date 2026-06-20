@@ -7342,7 +7342,7 @@ function upwardRowHtml(t, agg, included, ym){
   var store=STORES.find(function(s){return s.id===t.storeId;});
   var scoreHtml;
   if(agg){
-    scoreHtml='<div style="text-align:right"><div style="font-size:18px;font-weight:900;color:#A0503A">'+agg.avg.toFixed(1)+' <span style="font-size:11px;color:#9CA3AF;font-weight:700">/105</span></div><div style="font-size:11px;color:#6B7280">紀律 '+agg.disc+' · 收 '+agg.count+' 份（匿名 '+agg.anon+'・具名 '+agg.named+'）</div></div>';
+    scoreHtml='<div style="text-align:right"><div style="font-size:18px;font-weight:900;color:#A0503A">'+agg.avg.toFixed(1)+' <span style="font-size:11px;color:#9CA3AF;font-weight:700">/105</span></div></div>';
   } else {
     scoreHtml='<div style="font-size:12px;color:#9CA3AF;font-weight:700">尚無評分</div>';
   }
@@ -7376,7 +7376,18 @@ async function bossLoadUpward(){
   var sups=EMPLOYEES.filter(function(e){ return e.active!==false && e.position==='督導'; });
   if(sups.length){
     html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:13px;margin-bottom:14px;overflow:hidden"><div style="padding:11px 15px;background:linear-gradient(90deg,#374151,#6B7280);color:#fff;font-size:14px;font-weight:800">👤 督導（跨店）</div>';
-    sups.forEach(function(t){ html+=upwardRowHtml(t, upwardAggFull(reviews,t.id), cfg[t.id]!==false, ym); });
+    var companyRaters=EMPLOYEES.filter(function(e){ return e.active!==false && e.role!=='superadmin'; });
+    sups.forEach(function(t){
+      html+=upwardRowHtml(t, upwardAggFull(reviews,t.id), cfg[t.id]!==false, ym);
+      var rNode=(reviews||{})[t.id]||{};
+      var raters=companyRaters.filter(function(e){ return e.id!==t.id; });
+      var submitted=raters.filter(function(e){ return rNode[e.id]; });
+      var missing=raters.filter(function(e){ return !rNode[e.id]; });
+      html+='<div style="padding:10px 15px;background:#FCFBFA;border-top:1px dashed #E5E7EB;font-size:12px;font-weight:700;color:#4B5563">\ud83d\udcdd 全公司評分進度 '+submitted.length+'/'+raters.length;
+      if(missing.length){ var _mn=missing.slice(0,8).map(function(e){return e.name;}).join('、'); html+=' · <span style="color:#dc2626">未交 '+missing.length+' 人：</span>'+_mn+(missing.length>8?' …等':''); }
+      else { html+=' · <span style="color:#16a34a">全員已交</span>'; }
+      html+='</div>';
+    });
     html+='</div>';
   }
   var stores=STORES.filter(function(s){ return s.active!==false && (bossState.storeId==='all'||s.id===bossState.storeId); });
