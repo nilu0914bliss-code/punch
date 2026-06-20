@@ -8830,6 +8830,7 @@ window.bossOpenEmpDetail = function(empId){
   document.getElementById('ed-ecrel').value = ec.rel||'';
   document.getElementById('ed-ecphone').value = ec.phone||'';
   document.getElementById('ed-addr').value = emp.householdAddress||'';
+  document.getElementById('ed-phone').value = emp.phone||'';
   bossEmpDetailDeps = Array.isArray(emp.dependents) ? JSON.parse(JSON.stringify(emp.dependents)) : [];
   bossRenderDeps();
   document.getElementById('boss-emp-detail-modal').style.display = 'flex';
@@ -8862,9 +8863,10 @@ window.bossSaveEmpDetail = async function(){
   const emp = EMPLOYEES.find(function(e){return e.id===bossEmpDetailId;}); if(!emp) return;
   const emergencyContact = {name:(document.getElementById('ed-ecname').value||'').trim(), rel:(document.getElementById('ed-ecrel').value||'').trim(), phone:(document.getElementById('ed-ecphone').value||'').trim()};
   const householdAddress = (document.getElementById('ed-addr').value||'').trim();
+  const phone = (document.getElementById('ed-phone').value||'').trim();
   const dependents = bossEmpDetailDeps.filter(function(d){ return (d.name||'').trim()!==''; });
-  emp.emergencyContact = emergencyContact; emp.householdAddress = householdAddress; emp.dependents = dependents;
-  try { await fbUpdate('employees/' + bossEmpDetailId, {emergencyContact:emergencyContact, householdAddress:householdAddress, dependents:dependents}); }
+  emp.emergencyContact = emergencyContact; emp.householdAddress = householdAddress; emp.dependents = dependents; emp.phone = phone;
+  try { await fbUpdate('employees/' + bossEmpDetailId, {emergencyContact:emergencyContact, householdAddress:householdAddress, dependents:dependents, phone:phone}); }
   catch(e){ toast('儲存失敗,請重試','e'); return; }
   toast('已儲存 '+emp.name+' 的詳細資料','s');
   document.getElementById('boss-emp-detail-modal').style.display='none';
@@ -9393,6 +9395,8 @@ initApp().then(() => {
       <div id="ed-basic" style="font-size:13px;color:#374151;margin-bottom:12px"></div>
       <div style="font-size:11px;font-weight:800;color:#9CA3AF;margin-bottom:5px">個資 <span style="font-size:9px;background:#E0F2FE;color:#0c4a6e;padding:1px 6px;border-radius:10px">老闆專屬</span></div>
       <div id="ed-personal" style="font-size:13px;color:#374151;margin-bottom:14px"></div>
+      <div style="font-size:11px;font-weight:800;color:#9CA3AF;margin-bottom:7px">📱 本人電話</div>
+      <input id="ed-phone" placeholder="例:0912-345-678" style="width:100%;padding:9px 11px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;box-sizing:border-box;margin-bottom:14px">
       <div style="font-size:11px;font-weight:800;color:#9CA3AF;margin-bottom:7px">🚨 緊急聯絡人</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <input id="ed-ecname" placeholder="姓名" style="padding:9px 11px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;box-sizing:border-box">
