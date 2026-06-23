@@ -3609,9 +3609,8 @@ function upwardRenderAll(){
     : '<div class="uw-idnote anon">🔒 你的身分：' + (me.position||'正職') + ' → 評分將<b>匿名</b>送出,被評的人看不到是誰評的</div>';
   var picker = '<div class="uw-picklbl">評核對象(本店領班以上 + 督導)</div><div class="uw-picker" id="upward-picker"></div>';
   var items = '<div id="upward-items"></div>';
-  var disc = '<div class="uw-sectitle">自我紀律(獨立計分)</div><div class="uw-disc"><div class="uw-disc-head">紀律表現 <span>0 或 10 分</span></div><div class="uw-disc-body"><div class="uw-disc-opt" id="uw-disc-ok" onclick="upwardSetDisc(10)"><b>✅ 符合</b><span>無違紀 10 分</span></div><div class="uw-disc-opt" id="uw-disc-no" onclick="upwardSetDisc(0)"><b>⛔ 不符合</b><span>有違紀 0 分</span></div></div></div>';
   var submit = '<button class="uw-submit" onclick="upwardSubmit()">📤 送出本月評核(全部對象)</button>';
-  document.getElementById('upward-body').innerHTML = deadline + idnote + picker + items + disc + submit;
+  document.getElementById('upward-body').innerHTML = deadline + idnote + picker + items + submit;
   upwardRenderPicker();
   upwardRenderForm();
 }
@@ -7413,16 +7412,45 @@ window.bossSwitchKpiTab = function(which){
     upC.style.display='none'; exC.style.display='block';
   }
 };
-function upwardRowHtml(t, agg, included, ym){
+function upwardAggItems(reviewsForYm, targetId){
+  var node = (reviewsForYm||{})[targetId] || {};
+  var sums = {}, cnts = {}, any = false;
+  KPI_ITEMS.forEach(function(it){ sums[it.key]=0; cnts[it.key]=0; });
+  Object.keys(node).forEach(function(kk){
+    var r = node[kk];
+    if (r && r.scores){
+      KPI_ITEMS.forEach(function(it){
+        var v = r.scores[it.key];
+        if (typeof v === 'number'){ sums[it.key]+=v; cnts[it.key]++; any=true; }
+      });
+    }
+  });
+  if (!any) return null;
+  var out = {};
+  KPI_ITEMS.forEach(function(it){ out[it.key] = cnts[it.key]>0 ? Math.round(sums[it.key]/cnts[it.key]*10)/10 : null; });
+  return out;
+}
+function upwardRowHtml(t, agg, included, ym, reviews){
   var store=STORES.find(function(s){return s.id===t.storeId;});
   var scoreHtml;
   if(agg){
-    scoreHtml='<div style="text-align:right"><div style="font-size:18px;font-weight:900;color:#A0503A">'+agg.avg.toFixed(1)+' <span style="font-size:11px;color:#9CA3AF;font-weight:700">/105</span></div></div>';
+    scoreHtml='<div onclick="bossViewUpwardDetail(\''+t.id+'\')" style="text-align:right;cursor:pointer"><div style="font-size:18px;font-weight:900;color:#A0503A">'+agg.avg.toFixed(1)+' <span style="font-size:11px;color:#9CA3AF;font-weight:700">/105</span></div><div style="font-size:10px;color:#BE6148;font-weight:700">點看明細 ›</div></div>';
   } else {
     scoreHtml='<div style="font-size:12px;color:#9CA3AF;font-weight:700">尚無評分</div>';
   }
   var toggle='<button data-inc="'+(included?1:0)+'" onclick="bossToggleUpwardTarget(\''+t.id+'\',\''+ym+'\',this)" title="本月是否納入被評" style="width:44px;height:26px;border-radius:13px;border:none;cursor:pointer;position:relative;flex-shrink:0;background:'+(included?'#16a34a':'#D1D5DB')+'"><span style="position:absolute;width:20px;height:20px;border-radius:50%;background:#fff;top:3px;left:'+(included?'21px':'3px')+';box-shadow:0 1px 3px rgba(0,0,0,.2)"></span></button>';
-  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-top:1px solid #F3F4F6;'+(included?'':'opacity:.55')+'"><div style="flex:1"><div style="font-size:14px;font-weight:800">'+t.name+'</div><div style="font-size:11.5px;color:#6B7280;margin-top:1px">'+(t.position||'')+((t.position!=='督導'&&store)?(' · '+store.name):'')+(included?'':' · 本月不評')+'</div></div>'+scoreHtml+toggle+'</div>';
+  var itemsAvg = upwardAggItems(reviews, t.id);
+  var itemsBlock = '';
+  if (itemsAvg){
+    itemsBlock = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;margin-top:9px;padding-top:9px;border-top:1px dashed #EFEFEF">';
+    KPI_ITEMS.forEach(function(it){
+      var v = itemsAvg[it.key];
+      var c = v==null?'#9CA3AF':(v>=8?'#16a34a':(v>=6?'#F59E0B':'#dc2626'));
+      itemsBlock += '<div style="display:flex;justify-content:space-between;font-size:11.5px"><span style="color:#6B7280">'+it.name+'</span><span style="font-weight:800;color:'+c+'">'+(v==null?'—':v.toFixed(1))+'</span></div>';
+    });
+    itemsBlock += '</div>';
+  }
+  return '<div style="padding:12px 15px;border-top:1px solid #F3F4F6;'+(included?'':'opacity:.55')+'"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="flex:1"><div style="font-size:14px;font-weight:800">'+t.name+'</div><div style="font-size:11.5px;color:#6B7280;margin-top:1px">'+(t.position||'')+((t.position!=='督導'&&store)?(' · '+store.name):'')+(included?'':' · 本月不評')+'</div></div>'+scoreHtml+toggle+'</div>'+itemsBlock+'</div>';
 }
 window.bossToggleUpwardTarget = async function(targetId, ym, btn){
   var nowInc = btn.getAttribute('data-inc')==='1';
@@ -7468,7 +7496,7 @@ async function bossLoadUpward(){
     html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:13px;margin-bottom:14px;overflow:hidden"><div style="padding:11px 15px;background:linear-gradient(90deg,#374151,#6B7280);color:#fff;font-size:14px;font-weight:800">👤 督導（跨店）</div>';
     var companyRaters=EMPLOYEES.filter(function(e){ return e.active!==false && e.role!=='superadmin'; });
     sups.forEach(function(t){
-      html+=upwardRowHtml(t, upwardAggFull(reviews,t.id), cfg[t.id]!==false, ym);
+      html+=upwardRowHtml(t, upwardAggFull(reviews,t.id), cfg[t.id]!==false, ym, reviews);
       var rNode=(reviews||{})[t.id]||{};
       var raters=companyRaters.filter(function(e){ return e.id!==t.id; });
       var submitted=raters.filter(function(e){ return rNode[e.id]; });
@@ -7492,7 +7520,7 @@ async function bossLoadUpward(){
     var leads=EMPLOYEES.filter(function(e){ return e.active!==false && e.storeId===store.id && LEAD.indexOf(e.position)>=0; });
     if(!leads.length) return;
     html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:13px;margin-bottom:14px;overflow:hidden"><div style="padding:11px 15px;background:#F9FAFB;color:#1f2937;font-size:14px;font-weight:800;border-bottom:1px solid #E5E7EB">🏪 '+store.name+'</div>';
-    leads.forEach(function(t){ html+=upwardRowHtml(t, upwardAggFull(reviews,t.id), cfg[t.id]!==false, ym); });
+    leads.forEach(function(t){ html+=upwardRowHtml(t, upwardAggFull(reviews,t.id), cfg[t.id]!==false, ym, reviews); });
     var raters=EMPLOYEES.filter(function(e){ return e.active!==false && e.role!=='superadmin' && e.storeId===store.id; });
     var submitted=raters.filter(function(e){ return doneIds[e.id]; });
     var missing=raters.filter(function(e){ return !doneIds[e.id]; });
@@ -7561,6 +7589,40 @@ window.bossViewKpiComment = async function(empId){
     + '<button onclick="' + closeJs + '" style="width:100%;margin-top:6px;padding:12px;background:#F3F4F6;color:#374151;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">關閉</button>'
     + '</div>';
   ov.style.display = 'flex';
+};
+window.bossViewUpwardDetail = async function(targetId, ymOverride){
+  var ym = ymOverride || (bossState.year + '-' + String(bossState.month).padStart(2,'0'));
+  var node = await fbGet('upwardReviews/'+ym+'/'+targetId) || {};
+  var t = EMPLOYEES.find(function(e){ return e.id===targetId; });
+  var tName = t ? t.name : '';
+  var tPos = t ? (t.position||'') : '';
+  var sums={}, cnts={}, wsum=0, n=0, named=0, anon=0;
+  KPI_ITEMS.forEach(function(it){ sums[it.key]=0; cnts[it.key]=0; });
+  Object.keys(node).forEach(function(kk){
+    var r=node[kk];
+    if(r && typeof r.weightedScore==='number'){ wsum+=r.weightedScore; n++; if(r.named) named++; else anon++; }
+    if(r && r.scores){ KPI_ITEMS.forEach(function(it){ var v=r.scores[it.key]; if(typeof v==='number'){ sums[it.key]+=v; cnts[it.key]++; } }); }
+  });
+  if(!n){ if(window.toast) toast('這位本月還沒有下對上評核','s'); return; }
+  var avg = Math.round(wsum/n*10)/10;
+  var itemsHtml = KPI_ITEMS.map(function(it){
+    var v = cnts[it.key]>0 ? Math.round(sums[it.key]/cnts[it.key]*10)/10 : null;
+    var c = v==null?'#9CA3AF':(v>=8?'#16a34a':(v>=6?'#F59E0B':'#dc2626'));
+    var w = v==null?0:v*10;
+    return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px"><span style="font-weight:700;color:#374151">'+it.name+' <small style="color:#9CA3AF;font-weight:600">('+Math.round(it.weight*100)+'%)</small></span><span style="font-weight:800;color:'+c+'">'+(v==null?'—':v.toFixed(1))+' / 10</span></div><div style="height:7px;border-radius:4px;background:#EEF0F2;overflow:hidden"><i style="display:block;height:100%;border-radius:4px;width:'+w+'%;background:'+c+'"></i></div></div>';
+  }).join('');
+  var ov = document.getElementById('uw-detail-overlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='uw-detail-overlay'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:99999';
+  var closeJs="document.getElementById('uw-detail-overlay').style.display='none'";
+  ov.innerHTML = '<div style="background:#fff;width:100%;max-width:460px;max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 18px 28px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px"><div style="font-size:17px;font-weight:800;color:#7D3D2C">'+tName+' · 下對上評核</div><div onclick="'+closeJs+'" style="font-size:24px;color:#9CA3AF;cursor:pointer;line-height:1;padding:0 4px">&times;</div></div>'
+    + '<div style="font-size:12px;color:#9CA3AF;margin-bottom:14px">'+tPos+' · '+ym+'月 · 共 '+n+' 人評(具名 '+named+' · 匿名 '+anon+')</div>'
+    + '<div style="background:linear-gradient(135deg,#BE6148,#7D3D2C);color:#fff;border-radius:12px;padding:13px 16px;text-align:center;margin-bottom:15px"><div style="font-size:12px;opacity:.85">加權總平均</div><div style="font-size:30px;font-weight:800;margin-top:2px">'+avg.toFixed(1)+' <span style="font-size:13px;opacity:.8">/105</span></div></div>'
+    + '<div style="font-size:13px;font-weight:800;color:#7D3D2C;margin-bottom:8px">各項平均分數</div>'+itemsHtml
+    + '<button onclick="'+closeJs+'" style="width:100%;margin-top:10px;padding:12px;background:#F3F4F6;color:#374151;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">關閉</button>'
+    + '</div>';
+  ov.style.display='flex';
 };
 window.bossClearMonthKpi = async function(){
   var sel = document.getElementById('kpi-clear-month');
@@ -8096,7 +8158,7 @@ function renderPayrollTable(rows){
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;font-weight:700">' + c.totalPayable.toLocaleString() + '</td>';
     // KPI 分數 (唯讀,只老闆看得到)
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:center;background:#F5F6FF;color:' + (r.kpiScore!=null?'#3730a3':'#9CA3AF') + ';font-weight:700' + (r.kpiScore!=null?';cursor:pointer;text-decoration:underline dotted':'') + '"' + (r.kpiScore!=null?(' onclick="bossViewKpiComment(\'' + emp.id + '\')" title="點看詳細評語"'):'') + '>' + (r.kpiScore!=null ? Number(r.kpiScore).toFixed(1) : '—') + '</td>';
-    html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:center;background:#FDF0ED;color:' + (r.upwardScore!=null?'#A0503A':'#9CA3AF') + ';font-weight:700">' + (r.upwardScore!=null ? Number(r.upwardScore).toFixed(1) : '—') + '</td>';
+    html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:center;background:#FDF0ED;color:' + (r.upwardScore!=null?'#A0503A':'#9CA3AF') + ';font-weight:700' + (r.upwardScore!=null?';cursor:pointer;text-decoration:underline dotted':'') + '"' + (r.upwardScore!=null?(' onclick="bossViewUpwardDetail(\'' + emp.id + '\')" title="點看下對上明細"'):'') + '>' + (r.upwardScore!=null ? Number(r.upwardScore).toFixed(1) : '—') + '</td>';
     // 黃格:績效獎金
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right"><span class="bp-yellow" data-emp="' + emp.id + '" data-field="performanceBonus" data-label="績效獎金" onclick="bossOpenEdit(this,' + (c.performanceBonus||0) + ')" style="background:#FEF9E7;border:1px dashed #F59E0B;border-radius:4px;padding:2px 5px;cursor:pointer;display:inline-block;color:#2563eb;font-weight:700">' + (c.performanceBonus || '—') + '</span></td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;font-weight:800;color:#BE6148">' + c.totalSalary.toLocaleString() + '</td>';
