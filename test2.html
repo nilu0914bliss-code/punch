@@ -1247,6 +1247,17 @@ async function initApp() {
     const disp = document.getElementById('base-hours-display');
     if (disp) disp.textContent = monthlyHours;
   }
+  // ⭐ KPI 填寫時間(老闆可設定,上對下/下對上各自獨立)
+  if (settings && settings.kpiTiming) {
+    var _kt = settings.kpiTiming;
+    if (_kt.upOpenDay) UPWARD_OPEN_DAY = _kt.upOpenDay;
+    else if (_kt.openDay) UPWARD_OPEN_DAY = _kt.openDay;
+    if (typeof _kt.upAnytime === 'boolean') UPWARD_ANYTIME = _kt.upAnytime;
+    if (_kt.downOpenDay) DOWN_OPEN_DAY = _kt.downOpenDay;
+    if (typeof _kt.downAnytime === 'boolean') DOWN_ANYTIME = _kt.downAnytime;
+    if (typeof _kt.upEndDay === 'number') UPWARD_END_DAY = _kt.upEndDay;
+    if (typeof _kt.downEndDay === 'number') DOWN_END_DAY = _kt.downEndDay;
+  }
 
   // Re-enable login button
   if (loginBtn) { loginBtn.disabled = false; loginBtn.style.opacity = '1'; loginBtn.textContent = '🔑 登入'; }
@@ -3244,17 +3255,11 @@ window.mgrLoadKpiList = async function(){
       banner.style.border = '1px solid #10b981';
       banner.innerHTML = '✓ <b>' + kpiYear + ' 年 ' + kpiMonth + ' 月 KPI 已全部評分完成</b>';
       banner.style.display = 'block';
-    } else if (today <= 3){
+    } else {
       banner.style.background = '#FEF9E7';
       banner.style.color = '#92400E';
       banner.style.border = '1px solid #F59E0B';
-      banner.innerHTML = '⏰ <b>KPI 評分截止日:本月 3 號</b><br>請於 ' + (3 - today + 1) + ' 天內完成 ' + pending + ' 位員工的 ' + kpiYear + '/' + kpiMonth + '月 評分';
-      banner.style.display = 'block';
-    } else {
-      banner.style.background = '#FEE2E2';
-      banner.style.color = '#991b1b';
-      banner.style.border = '1px solid #c00';
-      banner.innerHTML = '⚠️ <b>KPI 已逾期!</b><br>應於每月 3 號前完成上月評分,目前還有 ' + pending + ' 位未評,老闆無法核算薪資。';
+      banner.innerHTML = '📋 <b>' + kpiYear + '/' + kpiMonth + '月 KPI 還有 ' + pending + ' 位員工未評分</b><br>' + (DOWN_ANYTIME ? '主管可隨時填寫,記得盡早完成喔' : '主管填寫期間:' + kpiWinText(false, DOWN_OPEN_DAY, DOWN_END_DAY));
       banner.style.display = 'block';
     }
   }
@@ -3512,11 +3517,26 @@ var upwardTargets = [];
 var upwardCurIdx = 0;
 var upwardScores = {};
 var upwardDisc = {};
-var UPWARD_OPEN_DAY = 25;  // 每月 25 號起開放填寫,至月底
+var UPWARD_OPEN_DAY = 25;  // 下對上(員工評主管)開放日:每月 X 號起~月底
+var UPWARD_ANYTIME = false;  // 下對上:是否不限時間隨時可填
+var DOWN_OPEN_DAY = 25;  // 上對下(主管評員工)開放日(顯示提醒用)
+var DOWN_ANYTIME = true;  // 上對下:預設不限時間隨時可填
+var UPWARD_END_DAY = 0;  // 下對上結束:0=當月月底,>0=次月該日(跨月)
+var DOWN_END_DAY = 0;  // 上對下結束:0=當月月底,>0=次月該日(跨月)
 
+function kpiWinText(anytime, startDay, endDay){
+  if (anytime) return '隨時可填';
+  if (!endDay) return '每月 ' + startDay + ' 號 ~ 月底';
+  return '每月 ' + startDay + ' 號 ~ 次月 ' + endDay + ' 號';
+}
 function upwardPeriod(){
   var now = new Date();
-  return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  var y = now.getFullYear(), m = now.getMonth()+1, d = now.getDate();
+  // 跨月視窗的尾段(次月 1~結束日):評的仍是上個月
+  if (!UPWARD_ANYTIME && UPWARD_END_DAY > 0 && d <= UPWARD_END_DAY){
+    m -= 1; if (m === 0){ m = 12; y -= 1; }
+  }
+  return y + '-' + String(m).padStart(2,'0');
 }
 function upwardDeadlineLabel(ym){
   var y = parseInt(ym.split('-')[0]), m = parseInt(ym.split('-')[1]);
@@ -3524,7 +3544,12 @@ function upwardDeadlineLabel(ym){
   return m + '/' + last;
 }
 function upwardWindowLabel(ym){ return UPWARD_OPEN_DAY + ' ~ ' + upwardDeadlineLabel(ym) + '（月底前）'; }
-function upwardIsOpen(){ return new Date().getDate() >= UPWARD_OPEN_DAY; }
+function upwardIsOpen(){
+  if (UPWARD_ANYTIME) return true;
+  var d = new Date().getDate();
+  if (UPWARD_END_DAY > 0) return d >= UPWARD_OPEN_DAY || d <= UPWARD_END_DAY;  // 跨月
+  return d >= UPWARD_OPEN_DAY;  // X ~ 月底
+}
 function upwardIsNamed(position){
   return ['領班','組長','副店長','店長','督導'].indexOf(position) >= 0;
 }
@@ -3736,18 +3761,30 @@ async function renderMySalary(){
   const sec = document.getElementById('mymonth-salary-section');
   if (!currentUser) return;
   
-  // ⭐ 可選月份:預設上月,員工可往前選近 12 個月
+  // ⭐ 可選月份:只列出「系統真的有薪資資料」的過去月份(避免顯示上線前沒資料的空月份)
   const now = new Date();
-  let dY = now.getFullYear(), dM = now.getMonth();  // 0-indexed = 上個月
-  if (dM === 0){ dM = 12; dY--; }
-  const defYm = dY + '-' + String(dM).padStart(2,'0');
-  const selYm = window.mySalarySelYm || defYm;
-  // 月份下拉(近 12 個月,從上月往前)
+  const _curYm = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  // 用 REST shallow 只抓 salaries 底下有哪些月份 key(超省流量,不整包下載)
+  let _monthKeys = [];
+  try {
+    const _r = await fetch('https://punch-83688-default-rtdb.asia-southeast1.firebasedatabase.app/salaries.json?shallow=true');
+    const _o = await _r.json();
+    if (_o) _monthKeys = Object.keys(_o).filter(k => /^\d{4}-\d{2}$/.test(k) && k < _curYm);
+  } catch (e) { _monthKeys = []; }
+  _monthKeys.sort().reverse();
+  _monthKeys = _monthKeys.slice(0, 12);
+
+  // 完全沒有可看的薪資 → 提示(不顯示空月份)
+  if (_monthKeys.length === 0) {
+    sec.innerHTML = '<div style="background:#fff;border-radius:14px;padding:30px 20px;text-align:center"><div style="font-size:42px;margin-bottom:11px">📭</div><div style="font-size:16px;font-weight:800;color:#7D3D2C;margin-bottom:6px">目前沒有可查看的薪資條</div><div style="font-size:13px;color:#6B7280;line-height:1.7">系統結算後,薪資條會在每月 10 號開放查看</div></div>';
+    return;
+  }
+
+  // 預設顯示最新一個月;使用者選過且仍在清單中則沿用
+  const selYm = (window.mySalarySelYm && _monthKeys.indexOf(window.mySalarySelYm) >= 0) ? window.mySalarySelYm : _monthKeys[0];
   let _mopts = '';
-  for (let _i = 1; _i <= 12; _i++){
-    const _d = new Date(now.getFullYear(), now.getMonth() - _i, 1);
-    const _y = _d.getFullYear(), _m = _d.getMonth() + 1;
-    const _v = _y + '-' + String(_m).padStart(2,'0');
+  for (const _v of _monthKeys) {
+    const _y = _v.split('-')[0], _m = parseInt(_v.split('-')[1]);
     _mopts += '<option value="' + _v + '"' + (_v === selYm ? ' selected' : '') + '>' + _y + '年 ' + _m + '月</option>';
   }
   const picker = '<div style="background:#fff;border:1.5px solid #BE6148;border-radius:12px;padding:10px 13px;margin-bottom:12px;display:flex;align-items:center;gap:10px"><span style="font-size:13px;font-weight:800;color:#7D3D2C;white-space:nowrap">查看月份</span><select onchange="window.mySalarySelYm=this.value;renderMySalary()" style="flex:1;padding:9px 11px;border:1px solid #E5E7EB;border-radius:9px;font-size:14px;font-weight:700;color:#374151;font-family:inherit;background:#FCFCFD">' + _mopts + '</select></div>';
@@ -3771,7 +3808,7 @@ async function renderMySalary(){
     else if (!isSettled) reason = '老闆尚未確認結算';
     else if (!isOpenDay) reason = '尚未到開放日 (每月 10 號開放上月薪資)';
     
-    sec.innerHTML = picker + '<div style="background:#fff;border-radius:14px;padding:30px 20px;text-align:center"><div style="font-size:42px;margin-bottom:11px">🔒</div><div style="font-size:16px;font-weight:800;color:#7D3D2C;margin-bottom:6px">' + salYear + '年 ' + salMonth + '月 薪資結算中</div><div style="font-size:13px;color:#6B7280;line-height:1.7">' + reason + '</div><div style="background:#FEF9E7;border-left:3px solid #F59E0B;padding:11px 13px;border-radius:8px;margin-top:14px;font-size:11.5px;color:#374151;text-align:left;line-height:1.7"><b>結算流程:</b><br>① 主管 3 號前完成 KPI 評分<br>② 老闆 10 號前完成核薪<br>③ 老闆按「確認結算」<br>④ 10 號當天自動開放查看</div></div>';
+    sec.innerHTML = picker + '<div style="background:#fff;border-radius:14px;padding:30px 20px;text-align:center"><div style="font-size:42px;margin-bottom:11px">🔒</div><div style="font-size:16px;font-weight:800;color:#7D3D2C;margin-bottom:6px">' + salYear + '年 ' + salMonth + '月 薪資結算中</div><div style="font-size:13px;color:#6B7280;line-height:1.7">' + reason + '</div><div style="background:#FEF9E7;border-left:3px solid #F59E0B;padding:11px 13px;border-radius:8px;margin-top:14px;font-size:11.5px;color:#374151;text-align:left;line-height:1.7"><b>結算流程:</b><br>① 主管完成 KPI 評分(隨時可填)<br>② 老闆 10 號前完成核薪<br>③ 老闆按「確認結算」<br>④ 10 號當天自動開放查看</div></div>';
     return;
   }
   
@@ -7380,7 +7417,7 @@ async function bossLoadUpward(){
   var subCount=scopeRaters.filter(function(e){ return doneIds[e.id]; }).length;
   var html='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
   html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">評核期間</div><div style="font-size:16px;font-weight:900;margin-top:2px">'+bossState.year+' 年 '+bossState.month+' 月</div></div>';
-  html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">填寫期間</div><div style="font-size:16px;font-weight:900;margin-top:2px;color:#b45309">'+UPWARD_OPEN_DAY+' ~ '+upwardDeadlineLabel(ym)+'（月底）</div></div>';
+  html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">填寫期間</div><div style="font-size:16px;font-weight:900;margin-top:2px;color:#b45309">'+kpiWinText(UPWARD_ANYTIME, UPWARD_OPEN_DAY, UPWARD_END_DAY)+'</div></div>';
   html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">已收件</div><div style="font-size:16px;font-weight:900;margin-top:2px;color:#BE6148">'+subCount+' / '+scopeRaters.length+' 人</div></div>';
   html+='</div>';
   html+='<div style="background:#FDF0ED;border-radius:11px;padding:11px 15px;margin-bottom:14px;font-size:12px;color:#7D3D2C;line-height:1.6">右側開關＝本月是否納入被評(關掉員工就不會評到他)。督導薪資公司另計,分數只在此顯示。</div>';
@@ -7449,6 +7486,76 @@ async function mgrLoadUpwardProgress(){
 }
 
 // ⭐ KPI 考核
+window.bossViewKpiComment = async function(empId){
+  var ym = bossState.year + '-' + String(bossState.month).padStart(2,'0');
+  var k = await fbGet('kpi/' + ym + '/' + empId);
+  if (!k){ if(window.toast) toast('這位本月沒有上對下 KPI 紀錄','s'); return; }
+  var emp = EMPLOYEES.find(function(e){ return e.id === empId; });
+  var empName = emp ? emp.name : '';
+  function _esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  var c = k.comments || {};
+  var rv = EMPLOYEES.find(function(e){ return e.id === k.reviewedBy; });
+  var rvName = rv ? rv.name : '—';
+  var when = k.reviewedAt ? new Date(k.reviewedAt).toLocaleDateString('zh-TW') : '—';
+  var itemsHtml = KPI_ITEMS.map(function(it){
+    var sc = (k[it.key] !== undefined && k[it.key] !== null) ? k[it.key] : '—';
+    return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F3F4F6;font-size:13px"><span style="color:#6B7280">' + it.name + '</span><span style="font-weight:700;color:#374151">' + sc + ' / 10</span></div>';
+  }).join('');
+  function block(title, txt, color){
+    return '<div style="margin-bottom:11px"><div style="font-size:12px;font-weight:800;color:' + color + ';margin-bottom:5px">' + title + '</div><div style="font-size:13.5px;color:#374151;line-height:1.75;white-space:pre-wrap;background:#F9FAFB;border-radius:8px;padding:10px 12px">' + (txt && String(txt).trim() ? _esc(txt) : '<span style="color:#9CA3AF">(未填寫)</span>') + '</div></div>';
+  }
+  var ov = document.getElementById('kpi-comment-overlay');
+  if (!ov){ ov = document.createElement('div'); ov.id = 'kpi-comment-overlay'; document.body.appendChild(ov); }
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:99999';
+  var closeJs = "document.getElementById('kpi-comment-overlay').style.display='none'";
+  ov.innerHTML = '<div style="background:#fff;width:100%;max-width:460px;max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 18px 28px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px"><div style="font-size:17px;font-weight:800;color:#7D3D2C">' + _esc(empName) + ' · 上對下 KPI</div><div onclick="' + closeJs + '" style="font-size:24px;color:#9CA3AF;cursor:pointer;line-height:1;padding:0 4px">&times;</div></div>'
+    + '<div style="font-size:12px;color:#9CA3AF;margin-bottom:14px">' + ym + '月 · 評分者:' + _esc(rvName) + ' · ' + when + '</div>'
+    + '<div style="background:linear-gradient(135deg,#BE6148,#7D3D2C);color:#fff;border-radius:12px;padding:13px 16px;text-align:center;margin-bottom:15px"><div style="font-size:12px;opacity:.85">加權總分</div><div style="font-size:30px;font-weight:800;margin-top:2px">' + (k.weightedScore!=null?Number(k.weightedScore).toFixed(1):'—') + '</div></div>'
+    + '<div style="font-size:13px;font-weight:800;color:#7D3D2C;margin-bottom:6px">各項評分</div><div style="margin-bottom:16px">' + itemsHtml + '</div>'
+    + block('👍 優點', c.strengths, '#059669')
+    + block('🔧 待改善', c.weaknesses, '#d97706')
+    + block('💡 建議', c.suggestions, '#2563eb')
+    + '<button onclick="' + closeJs + '" style="width:100%;margin-top:6px;padding:12px;background:#F3F4F6;color:#374151;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">關閉</button>'
+    + '</div>';
+  ov.style.display = 'flex';
+};
+window.bossClearMonthKpi = async function(){
+  var sel = document.getElementById('kpi-clear-month');
+  var ym = sel ? sel.value : '';
+  if (!ym){ if(window.toast) toast('請先選月份','s'); return; }
+  if (!confirm('確定要清除 ' + ym + ' 月的「所有 KPI」嗎?\n\n會刪除:\n· 上對下(主管評員工)\n· 下對上(員工評主管)\n\n薪資、打卡、員工資料不受影響,但 KPI 刪了無法復原。')) return;
+  if (!confirm('再次確認:真的要刪掉 ' + ym + ' 月的 KPI?')) return;
+  try {
+    await fbRemove('kpi/' + ym);
+    await fbRemove('kpiSubmitted/' + ym);
+    await fbRemove('upwardReviews/' + ym);
+    await fbRemove('upwardDone/' + ym);
+    await fbRemove('upwardConfig/' + ym);
+    if(window.toast) toast('已清除 ' + ym + ' 月 KPI','s');
+    bossLoadKpi();
+  } catch(e){ if(window.toast) toast('清除失敗,請重試','d'); }
+};
+window.bossSaveKpiTiming = async function(){
+  function rd(k){
+    var any = !!((document.getElementById('kpi-'+k+'-anytime')||{}).checked);
+    var day = parseInt((document.getElementById('kpi-'+k+'-day')||{}).value);
+    var endSel = document.querySelector('input[name="kpi-'+k+'-end"]:checked');
+    var endMode = endSel ? endSel.value : 'monthend';
+    var endDay = endMode === 'next' ? parseInt((document.getElementById('kpi-'+k+'-endday')||{}).value) : 0;
+    return { any:any, day:day, endDay:endDay, endMode:endMode };
+  }
+  var d = rd('down'), u = rd('up');
+  var msg = document.getElementById('kpi-timing-msg');
+  function bad(x){ return (!x.any) && (!x.day || x.day<1 || x.day>28 || (x.endMode==='next' && (!x.endDay || x.endDay<1 || x.endDay>28))); }
+  if (bad(d) || bad(u)){ if(msg){ msg.textContent='⚠️ 號數請輸入 1-28'; msg.style.color='#c00'; } return; }
+  DOWN_ANYTIME = d.any; if(d.day) DOWN_OPEN_DAY = d.day; DOWN_END_DAY = d.endDay;
+  UPWARD_ANYTIME = u.any; if(u.day) UPWARD_OPEN_DAY = u.day; UPWARD_END_DAY = u.endDay;
+  try {
+    await fbSet('settings/kpiTiming', { downAnytime:d.any, downOpenDay:DOWN_OPEN_DAY, downEndDay:DOWN_END_DAY, upAnytime:u.any, upOpenDay:UPWARD_OPEN_DAY, upEndDay:UPWARD_END_DAY });
+    if(msg){ msg.textContent='✓ 已儲存,立即生效'; msg.style.color='#10b981'; }
+  } catch(e){ if(msg){ msg.textContent='⚠️ 儲存失敗'; msg.style.color='#c00'; } }
+};
 async function bossLoadKpi(){
   const emps = bossFilterEmps();
   const cont = document.getElementById('boss-kpi-content');
@@ -7472,8 +7579,10 @@ async function bossLoadKpi(){
   
   let html = '<div style="background:#FDF0ED;border-radius:11px;padding:13px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">';
   html += '<div><div style="font-size:12px;color:#7D3D2C">本月評分進度</div><div style="font-size:18px;font-weight:800;color:#BE6148;margin-top:3px">' + reviewed + ' / ' + emps.length + ' 員工已評分</div></div>';
-  html += '<div style="font-size:11px;color:#6B7280;line-height:1.6">主管 3 號前完成<br>老闆 10 號前完成</div>';
+  html += '<div style="font-size:11px;color:#6B7280;line-height:1.6">' + (DOWN_ANYTIME ? '主管可隨時評分' : '主管 ' + kpiWinText(false, DOWN_OPEN_DAY, DOWN_END_DAY)) + '<br>老闆 10 號前完成</div>';
   html += '</div>';
+  // ⭐ KPI 填寫時間設定(老闆可改)
+  html += '<details style="background:#fff;border:1px solid #F3E6E1;border-radius:11px;padding:12px 15px;margin-bottom:14px"><summary style="cursor:pointer;font-size:13px;font-weight:800;color:#7D3D2C;list-style:none">⏰ KPI 填寫時間設定（點開可調整）</summary><div style="margin-top:12px"><div style="background:#FDF0ED;border-radius:9px;padding:11px 13px;margin-bottom:10px"><div style="font-size:12px;font-weight:800;color:#7D3D2C;margin-bottom:7px">上對下（主管評員工）</div><label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;margin-bottom:7px"><input type="checkbox" id="kpi-down-anytime"' + (DOWN_ANYTIME ? ' checked' : '') + ' style="width:16px;height:16px"> 不限時間,隨時可填</label><div style="display:flex;align-items:center;gap:6px;font-size:13.5px;margin-bottom:7px">開始:每月 <input type="number" id="kpi-down-day" value="' + DOWN_OPEN_DAY + '" min="1" max="28" style="width:56px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</div><div style="display:flex;align-items:center;gap:8px;font-size:13.5px;flex-wrap:wrap">結束:<label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-down-end" value="monthend"' + (DOWN_END_DAY>0?'':' checked') + '> 當月月底</label><label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-down-end" value="next"' + (DOWN_END_DAY>0?' checked':'') + '> 次月 <input type="number" id="kpi-down-endday" value="' + (DOWN_END_DAY>0?DOWN_END_DAY:3) + '" min="1" max="28" style="width:50px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</label></div></div><div style="background:#FDF0ED;border-radius:9px;padding:11px 13px;margin-bottom:10px"><div style="font-size:12px;font-weight:800;color:#7D3D2C;margin-bottom:7px">下對上（員工評主管）</div><label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;margin-bottom:7px"><input type="checkbox" id="kpi-up-anytime"' + (UPWARD_ANYTIME ? ' checked' : '') + ' style="width:16px;height:16px"> 不限時間,隨時可填</label><div style="display:flex;align-items:center;gap:6px;font-size:13.5px;margin-bottom:7px">開始:每月 <input type="number" id="kpi-up-day" value="' + UPWARD_OPEN_DAY + '" min="1" max="28" style="width:56px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</div><div style="display:flex;align-items:center;gap:8px;font-size:13.5px;flex-wrap:wrap">結束:<label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-up-end" value="monthend"' + (UPWARD_END_DAY>0?'':' checked') + '> 當月月底</label><label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-up-end" value="next"' + (UPWARD_END_DAY>0?' checked':'') + '> 次月 <input type="number" id="kpi-up-endday" value="' + (UPWARD_END_DAY>0?UPWARD_END_DAY:3) + '" min="1" max="28" style="width:50px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</label></div></div><div style="font-size:11px;color:#9CA3AF;margin-top:2px;line-height:1.6">· 勾「不限時間」= 隨時可填<br>· 結束選「次月 X 號」就是跨月(例:25 號 ~ 次月 3 號)<br>· 過了結束日仍可補填、不會鎖住</div><button onclick="bossSaveKpiTiming()" style="margin-top:11px;padding:9px 18px;background:var(--s);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer">儲存時間設定</button><span id="kpi-timing-msg" style="margin-left:10px;font-size:12px"></span></div></details>';
   
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">';
   emps.forEach(e => {
@@ -7502,9 +7611,24 @@ async function bossLoadKpi(){
   html += '</div>';
   
   html += '<div style="background:#FEF9E7;border-left:3px solid #F59E0B;padding:11px 14px;border-radius:8px;margin-top:14px;font-size:12px;color:#374151;line-height:1.7">';
-  html += '💡 主管應於每月 1~3 號完成本店員工 KPI 評分。';
+  html += '💡 ' + (DOWN_ANYTIME ? '主管可隨時完成本店員工 KPI 評分。' : '主管請於 ' + kpiWinText(false, DOWN_OPEN_DAY, DOWN_END_DAY) + ' 完成本店員工 KPI 評分。');
   html += '</div>';
-  
+
+  // 🗑️ 清除某月 KPI(老闆專用,測試清理)
+  var _clrMonths = [];
+  try {
+    var _ck = await fetch('https://punch-83688-default-rtdb.asia-southeast1.firebasedatabase.app/kpi.json?shallow=true').then(function(r){ return r.json(); }).catch(function(){ return null; });
+    var _cu = await fetch('https://punch-83688-default-rtdb.asia-southeast1.firebasedatabase.app/upwardReviews.json?shallow=true').then(function(r){ return r.json(); }).catch(function(){ return null; });
+    var _cset = {};
+    if (_ck) Object.keys(_ck).forEach(function(k){ if(/^\d{4}-\d{2}$/.test(k)) _cset[k]=1; });
+    if (_cu) Object.keys(_cu).forEach(function(k){ if(/^\d{4}-\d{2}$/.test(k)) _cset[k]=1; });
+    _clrMonths = Object.keys(_cset).sort().reverse();
+  } catch(e){ _clrMonths = []; }
+  if (_clrMonths.length){
+    var _copts = _clrMonths.map(function(m){ return '<option value="' + m + '">' + m + '</option>'; }).join('');
+    html += '<details style="border:1px solid #FCA5A5;background:#FEF2F2;border-radius:11px;padding:12px 15px;margin-top:16px"><summary style="cursor:pointer;font-size:13px;font-weight:800;color:#b91c1c;list-style:none">🗑️ 清除某月 KPI（測試清理用）</summary><div style="margin-top:11px"><div style="font-size:12px;color:#7f1d1d;line-height:1.7;margin-bottom:10px">清除後該月「上對下 + 下對上」全部 KPI 會被刪除,<b>無法復原</b>。<br>薪資、打卡、員工資料<b>不受影響</b>。</div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><select id="kpi-clear-month" style="padding:8px 11px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;font-weight:700">' + _copts + '</select><button onclick="bossClearMonthKpi()" style="padding:9px 16px;background:#dc2626;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer">🗑️ 清除這個月的 KPI</button></div></div></details>';
+  }
+
   cont.innerHTML = html;
 }
 
@@ -7946,7 +8070,7 @@ function renderPayrollTable(rows){
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right"><span class="bp-yellow" data-emp="' + emp.id + '" data-field="salesBonus" data-label="業務津貼" onclick="bossOpenEdit(this,' + (c.salesBonus||0) + ')" style="background:#FEF9E7;border:1px dashed #F59E0B;border-radius:4px;padding:2px 5px;cursor:pointer;display:inline-block">' + (c.salesBonus || '—') + '</span></td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;font-weight:700">' + c.totalPayable.toLocaleString() + '</td>';
     // KPI 分數 (唯讀,只老闆看得到)
-    html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:center;background:#F5F6FF;color:' + (r.kpiScore!=null?'#3730a3':'#9CA3AF') + ';font-weight:700">' + (r.kpiScore!=null ? Number(r.kpiScore).toFixed(1) : '—') + '</td>';
+    html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:center;background:#F5F6FF;color:' + (r.kpiScore!=null?'#3730a3':'#9CA3AF') + ';font-weight:700' + (r.kpiScore!=null?';cursor:pointer;text-decoration:underline dotted':'') + '"' + (r.kpiScore!=null?(' onclick="bossViewKpiComment(\'' + emp.id + '\')" title="點看詳細評語"'):'') + '>' + (r.kpiScore!=null ? Number(r.kpiScore).toFixed(1) : '—') + '</td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:center;background:#FDF0ED;color:' + (r.upwardScore!=null?'#A0503A':'#9CA3AF') + ';font-weight:700">' + (r.upwardScore!=null ? Number(r.upwardScore).toFixed(1) : '—') + '</td>';
     // 黃格:績效獎金
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right"><span class="bp-yellow" data-emp="' + emp.id + '" data-field="performanceBonus" data-label="績效獎金" onclick="bossOpenEdit(this,' + (c.performanceBonus||0) + ')" style="background:#FEF9E7;border:1px dashed #F59E0B;border-radius:4px;padding:2px 5px;cursor:pointer;display:inline-block;color:#2563eb;font-weight:700">' + (c.performanceBonus || '—') + '</span></td>';
