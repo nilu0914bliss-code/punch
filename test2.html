@@ -1258,6 +1258,8 @@ async function initApp() {
     if (typeof _kt.upEndDay === 'number') UPWARD_END_DAY = _kt.upEndDay;
     if (typeof _kt.downEndDay === 'number') DOWN_END_DAY = _kt.downEndDay;
   }
+  // ⭐ 設定載入完後重畫下對上入口(避免 DOMContentLoaded 早渲染用到預設值)
+  if (typeof renderUwEntry === 'function') renderUwEntry();
 
   // Re-enable login button
   if (loginBtn) { loginBtn.disabled = false; loginBtn.style.opacity = '1'; loginBtn.textContent = '🔑 登入'; }
@@ -4996,6 +4998,11 @@ function renderEmpList() {
     const main = document.createElement('div'); main.className = 'emp-card-main';
     main.innerHTML = '<div class="emp-av ' + (isMgr?'mgr':'emp') + '">' + e.name.charAt(0) + '</div><div style="flex:1"><div style="font-size:14px;font-weight:800">' + e.name + (isMgr?' <span style="font-size:11px;color:var(--s)">👑主管</span>':'') + '</div><div style="font-size:12px;color:var(--g5);margin-top:2px">編號：<b>' + e.code + '</b>・' + storeName + (isActive?'':'・<span style="color:var(--g4)">已停用</span>') + '</div></div><div style="display:flex;gap:5px;flex-shrink:0"><button style="background:var(--pl);color:var(--p);border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer" id="edit-btn-' + e.id + '">編輯</button><button style="background:' + (isActive?'var(--dl)':'var(--sl)') + ';color:' + (isActive?'var(--d)':'var(--s)') + ';border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer" id="toggle-btn-' + e.id + '">' + (isActive?'停用':'啟用') + '</button><button style="background:#f3f4f6;color:#9ca3af;border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer" id="del-btn-' + e.id + '">刪除</button></div>';
     card.appendChild(main);
+    // ⭐ 主管/老闆:密碼設定列(renderEmpList 已依門市過濾,主管只會看到自己店夥伴)
+    var pwRow = document.createElement('div');
+    pwRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:2px 12px 10px';
+    pwRow.innerHTML = '<span style="font-size:12px;color:var(--g5);font-weight:700;white-space:nowrap">🔑 密碼</span><input id="pw-mgr-' + e.id + '" placeholder="設定/改密碼(4-12碼英數)" onchange="bossInlinePassword(\'' + e.id + '\', this)" style="flex:1;padding:6px 9px;border:1.5px solid #D1D5DB;border-radius:7px;font-size:12px;font-family:monospace;box-sizing:border-box">';
+    card.appendChild(pwRow);
     const editForm = document.createElement('div');
     editForm.className = 'emp-card-edit'; editForm.id = 'emp-edit-' + e.id;
     const POSITIONS_LIST = ['督導','店長','副店長','組長','領班','正職人員','實習正職','PT196','PT200','PT230','PT235','PT240','PT250','PT300'];
@@ -5014,6 +5021,14 @@ function renderEmpList() {
     document.getElementById('del-btn-' + e.id).onclick = () => deleteEmp(e.id, e.name);
     document.getElementById('save-emp-' + e.id).onclick = () => saveEmpEdit(e.id);
     document.getElementById('cancel-emp-' + e.id).onclick = () => toggleEmpEdit(e.id);
+  });
+  // ⭐ 渲染後非同步填入現有明文密碼(主管/老闆看得到)
+  fbGet('passwordPlaintext').then(function(pwMap){
+    pwMap = pwMap || {};
+    emps.forEach(function(e){
+      var inp = document.getElementById('pw-mgr-' + e.id);
+      if (inp && pwMap[e.id]) inp.value = pwMap[e.id];
+    });
   });
 }
 
@@ -6406,6 +6421,18 @@ function setupRealtimeListeners() {
       if (document.getElementById('pg-month').classList.contains('active')) {
         renderMonthTable();
       }
+    }
+    // ⭐ KPI 時間即時更新:老闆一存,所有人(含員工)立即套用、重畫入口,免重整
+    if (s.kpiTiming) {
+      var _kt = s.kpiTiming;
+      if (_kt.upOpenDay) UPWARD_OPEN_DAY = _kt.upOpenDay;
+      else if (_kt.openDay) UPWARD_OPEN_DAY = _kt.openDay;
+      if (typeof _kt.upAnytime === 'boolean') UPWARD_ANYTIME = _kt.upAnytime;
+      if (_kt.downOpenDay) DOWN_OPEN_DAY = _kt.downOpenDay;
+      if (typeof _kt.downAnytime === 'boolean') DOWN_ANYTIME = _kt.downAnytime;
+      if (typeof _kt.upEndDay === 'number') UPWARD_END_DAY = _kt.upEndDay;
+      if (typeof _kt.downEndDay === 'number') DOWN_END_DAY = _kt.downEndDay;
+      if (typeof renderUwEntry === 'function') renderUwEntry();
     }
   });
 
@@ -8283,11 +8310,31 @@ async function bossLoadEmpList(){
   
   // 抓密碼明文清單 (老闆專屬)
   const pwPlaintext = await fbGet('passwordPlaintext') || {};
-  
-  let html = insGradePanel() + '<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">';
+  const POS = ['督導','店長','副店長','組長','領班','正職人員','實習正職','PT196','PT200','PT230','PT235','PT240','PT250','PT300'];
+  var _storeOpts = STORES.filter(function(s){return s.active;}).map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
+  var _posOptsAdd = POS.map(function(p){return '<option value="'+p+'">'+p+'</option>';}).join('');
+  var addEmpHtml = '<div style="margin-bottom:14px">'
+    + '<button onclick="var f=document.getElementById(\'boss-add-form\'); f.style.display=(f.style.display===\'none\'?\'block\':\'none\');" style="width:100%;padding:11px;background:#7D3D2C;color:#fff;border:none;border-radius:10px;font-size:13.5px;font-weight:800;cursor:pointer">➕ 新增員工</button>'
+    + '<div id="boss-add-form" style="display:none;background:#FDF0ED;border-radius:11px;padding:13px;margin-top:8px">'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+        + '<div><div style="font-size:11.5px;font-weight:700;color:#7D3D2C;margin-bottom:3px">姓名 *</div><input id="boss-ne-name" placeholder="例:王小明" style="width:100%;padding:8px 10px;border:1.5px solid #E5D5CF;border-radius:7px;font-size:13.5px;box-sizing:border-box"></div>'
+        + '<div><div style="font-size:11.5px;font-weight:700;color:#7D3D2C;margin-bottom:3px">員工編號 *</div><input id="boss-ne-code" placeholder="編號 或 手機號" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:8px 10px;border:1.5px solid #E5D5CF;border-radius:7px;font-size:13.5px;box-sizing:border-box;text-transform:uppercase"></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">'
+        + '<div><div style="font-size:11.5px;font-weight:700;color:#7D3D2C;margin-bottom:3px">所屬門市 *</div><select id="boss-ne-store" style="width:100%;padding:8px 10px;border:1.5px solid #E5D5CF;border-radius:7px;font-size:13.5px;box-sizing:border-box;background:#fff">'+_storeOpts+'</select></div>'
+        + '<div><div style="font-size:11.5px;font-weight:700;color:#7D3D2C;margin-bottom:3px">職階(自動帶健保級距)</div><select id="boss-ne-pos" style="width:100%;padding:8px 10px;border:1.5px solid #E5D5CF;border-radius:7px;font-size:13.5px;box-sizing:border-box;background:#fff">'+_posOptsAdd+'</select></div>'
+      + '</div>'
+      + '<div style="display:flex;gap:7px;margin-top:10px">'
+        + '<button onclick="bossAddEmp()" style="flex:1;padding:9px;background:#BE6148;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">✅ 新增</button>'
+        + '<button onclick="document.getElementById(\'boss-add-form\').style.display=\'none\'" style="padding:9px 14px;background:#fff;border:1px solid #E5E7EB;border-radius:8px;font-size:13px;cursor:pointer">取消</button>'
+      + '</div>'
+      + '<div id="boss-add-err" style="color:#dc2626;font-size:12px;margin-top:7px"></div>'
+      + '<div style="font-size:11px;color:#9CA3AF;margin-top:6px;line-height:1.6">身分證、生日、密碼可在新增後用「編輯/詳細」補。新增完各店主管立刻看得到。</div>'
+    + '</div>'
+  + '</div>';
+  let html = insGradePanel() + addEmpHtml + '<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">';
   html += '<colgroup><col style="width:6%"><col style="width:6%"><col style="width:13%"><col style="width:7%"><col style="width:12%"><col style="width:9%"><col style="width:7%"><col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:16%"></colgroup>';
   html += '<thead><tr style="background:#F9FAFB">';
-  const POS = ['督導','店長','副店長','組長','領班','正職人員','實習正職','PT196','PT200','PT230','PT235','PT240','PT250','PT300'];
   html += '<th style="padding:9px;text-align:left">姓名</th>';
   html += '<th style="padding:9px;text-align:left">員工編號</th>';
   html += '<th style="padding:9px;text-align:left">門市</th>';
@@ -8350,6 +8397,7 @@ async function bossLoadEmpList(){
       } else {
         actions += '<button onclick="bossToggleFreeze(\'' + e.id + '\',true)" style="background:#FEE2E2;color:#991b1b;border:none;padding:5px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">🚫 凍結</button>';
       }
+      actions += '<button onclick="bossDeleteEmp(\'' + e.id + '\',\'' + e.name + '\')" style="background:#dc2626;color:#fff;border:none;padding:5px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">🗑️ 刪除</button>';
     }
     actions += '</div>';
     html += '<td style="padding:9px;text-align:center">' + actions + '</td>';
@@ -8361,6 +8409,34 @@ async function bossLoadEmpList(){
   html += '<div style="background:#FDF0ED;border-left:3px solid #BE6148;padding:10px 13px;border-radius:6px;font-size:11.5px;color:#374151;margin-top:11px;line-height:1.7"><b>🔑 密碼管理:</b>「目前密碼」欄位顯示明文密碼(只有老闆能看到)。設定/重置後請透過 LINE 私訊員工。員工不能自己改密碼。</div>';
   cont.innerHTML = html;
 }
+
+// ⭐ 後台新增員工(沿用 confirmAddEmp 同套欄位)
+window.bossAddEmp = async function(){
+  var name = ((document.getElementById('boss-ne-name')||{}).value || '').trim();
+  var code = ((document.getElementById('boss-ne-code')||{}).value || '').trim().toUpperCase();
+  var storeId = (document.getElementById('boss-ne-store')||{}).value || '';
+  var position = (document.getElementById('boss-ne-pos')||{}).value || '正職人員';
+  var errEl = document.getElementById('boss-add-err');
+  if (!name){ if(errEl) errEl.textContent='請填寫姓名'; return; }
+  if (!code){ if(errEl) errEl.textContent='請填寫員工編號'; return; }
+  if (EMPLOYEES.find(function(e){ return e.code && e.code.toUpperCase()===code; })){ if(errEl) errEl.textContent='此員工編號已存在'; return; }
+  var store = STORES.find(function(s){ return s.id===storeId; });
+  var data = { name:name, code:code, storeId:storeId, storeName: store?store.name:'', role:'employee', active:true, hireDate:'', position:position, healthGrade:0 };
+  var key = await fbPush('employees', data);
+  EMPLOYEES.push(Object.assign({}, data, {id:key}));
+  if (window.toast) toast('✅ '+name+'（'+code+'）已新增','s');
+  bossLoadEmpList();
+};
+
+// ⭐ 後台永久刪除員工(打字確認;硬刪不可復原)
+window.bossDeleteEmp = async function(id, name){
+  var ans = prompt('⚠️ 永久刪除「'+name+'」?\n\n此動作無法復原。\n他過去的打卡 / 薪資 / KPI 紀錄會變成孤兒。\n離職通常建議用「凍結」(資料保留)。\n\n確定要永久刪除,請輸入「刪除」:');
+  if (ans !== '刪除'){ if(ans!==null && window.toast) toast('已取消(未輸入「刪除」)','d'); return; }
+  await fbRemove('employees/' + id);
+  EMPLOYEES = EMPLOYEES.filter(function(e){ return e.id !== id; });
+  if (window.toast) toast('已永久刪除 '+name,'s');
+  bossLoadEmpList();
+};
 
 // ════════════════════════════════════════════════════════
 // ⭐ 密碼管理 (老闆專屬)
