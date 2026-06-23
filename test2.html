@@ -3658,6 +3658,13 @@ function upwardSetDiscUI(v){
   if (no) no.className = 'uw-disc-opt' + (v===0?' on-no':'');
 }
 window.upwardSubmit = async function(){
+  // ⭐ 送出前二次確認(避免手滑;並提醒未評分會以 8 分計)
+  var _total = upwardTargets.length;
+  var _untouched = upwardTargets.filter(function(t){ return !upwardScores[t.id]; }).length;
+  var _msg = '確認送出本月主管評核?\n\n⚠️ 送出後就無法再修改。';
+  if (_untouched > 0){ _msg += '\n\n還有 ' + _untouched + ' 位尚未評分,送出後會自動以「8 分」計算。'; }
+  _msg += '\n\n(共 ' + _total + ' 位評核對象)';
+  if (!confirm(_msg)) return;
   var me = EMPLOYEES.find(function(e){ return e.id === currentUser.id; }) || {};
   var named = upwardIsNamed(me.position);
   var ym = upwardPeriod();
