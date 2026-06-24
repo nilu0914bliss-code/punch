@@ -3565,13 +3565,20 @@ function upwardComputeTargets(){
   list.sort(function(a,b){ return (a.position==='督導'?0:1) - (b.position==='督導'?0:1); });
   return list;
 }
-function renderUwEntry(){
+async function renderUwEntry(){
   var slot = document.getElementById('uw-entry-slot');
   if (!slot) return;
   var ym = upwardPeriod();
   if (upwardIsOpen()){
+    var _uwDone = null;
+    if (currentUser && currentUser.id){ try { _uwDone = await fbGet('upwardDone/' + ym + '/' + currentUser.id); } catch(e){} }
+    if (_uwDone){
+      slot.innerHTML = '<div style="margin:0 0 4px;display:flex;justify-content:center"><div onclick="openUpward()" style="padding:9px 16px;background:#F0FDF4;border:1.5px solid #16a34a;border-radius:22px;font-size:13px;font-weight:800;color:#166534;display:flex;align-items:center;gap:8px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.06)"><span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block"></span>✅ 已送出 · 月底前可修改 →</div></div>'
+        + '<div style="text-align:center;font-size:11px;color:#9CA3AF;margin:0 0 12px;line-height:1.5">📅 月底（' + upwardDeadlineLabel(ym) + '）前都能再打開修改,過了就鎖定</div>';
+    } else {
     slot.innerHTML = '<div style="margin:0 0 4px;display:flex;justify-content:center"><div onclick="openUpward()" style="padding:9px 16px;background:#fff;border:1px solid #E5E7EB;border-radius:22px;font-size:13px;font-weight:800;color:#7D3D2C;display:flex;align-items:center;gap:8px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.06)"><span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block"></span>本月主管評核待填寫 →</div></div>'
       + '<div style="text-align:center;font-size:11px;color:#9CA3AF;margin:0 0 12px;line-height:1.5">📅 本月開放中，請在月底（' + upwardDeadlineLabel(ym) + '）前完成評分</div>';
+    }
   } else {
     slot.innerHTML = '<div style="margin:0 0 4px;display:flex;justify-content:center"><div onclick="upwardNotOpenYet()" style="padding:9px 16px;background:#fff;border:1px solid #E5E7EB;border-radius:22px;font-size:13px;font-weight:700;color:#9CA3AF;display:flex;align-items:center;gap:8px;cursor:pointer"><span style="width:8px;height:8px;border-radius:50%;background:#D1D5DB;display:inline-block"></span>主管評核 · ' + UPWARD_OPEN_DAY + ' 號起開放</div></div>'
       + '<div style="text-align:center;font-size:11px;color:#9CA3AF;margin:0 0 12px;line-height:1.5">📅 每月 ' + UPWARD_OPEN_DAY + ' 號 ~ 月底開放填寫,還沒到時間喔</div>';
@@ -3589,13 +3596,15 @@ window.openUpward = async function(){
   var sub = document.getElementById('upward-top-sub');
   if (sub) sub.textContent = ym.split('-')[0] + ' 年 ' + parseInt(ym.split('-')[1]) + ' 月 · 截止 ' + upwardDeadlineLabel(ym);
   document.getElementById('upward-overlay').style.display = 'flex';
-  var done = null;
-  try { done = await fbGet('upwardDone/' + ym + '/' + currentUser.id); } catch(e){}
-  if (done){
-    document.getElementById('upward-body').innerHTML = '<div style="text-align:center;padding:54px 20px"><div style="font-size:50px">✅</div><div style="font-size:16px;font-weight:800;color:#7D3D2C;margin-top:12px">你本月已完成主管評核</div><div style="font-size:13px;color:#6B7280;margin-top:6px">感謝你的回饋!</div></div>';
-    return;
-  }
   upwardCurIdx = 0; upwardScores = {}; upwardDisc = {};
+  // ⭐ 月底前可修改:帶回自己前次填的分數
+  try {
+    var _prev = await fbGet('upwardReviews/' + ym) || {};
+    upwardTargets.forEach(function(t){
+      var mine = _prev[t.id] && _prev[t.id][currentUser.id];
+      if (mine && mine.scores){ upwardScores[t.id] = Object.assign({}, mine.scores); }
+    });
+  } catch(e){}
   upwardRenderAll();
 };
 window.closeUpward = function(){ document.getElementById('upward-overlay').style.display = 'none'; };
@@ -3676,8 +3685,8 @@ window.upwardSubmit = async function(){
       var sum = 0;
       KPI_ITEMS.forEach(function(it){ sum += (sc[it.key]||0) * it.weight * 10; });
       var rec = { scores: sc, discipline: (upwardDisc[t.id]!==undefined?upwardDisc[t.id]:10), weightedScore: Math.round(sum*100)/100, named: named, ts: Date.now() };
-      if (named){ rec.evaluatorName = currentUser.name; await fbSet('upwardReviews/'+ym+'/'+t.id+'/'+currentUser.id, rec); }
-      else { await fbPush('upwardReviews/'+ym+'/'+t.id, rec); }
+      if (named){ rec.evaluatorName = currentUser.name; }
+      await fbSet('upwardReviews/'+ym+'/'+t.id+'/'+currentUser.id, rec);
     }
     await fbSet('upwardDone/'+ym+'/'+currentUser.id, { storeId: (currentUser.storeId||''), name: currentUser.name, ts: Date.now() });
     toast('🎉 本月主管評核已送出,感謝!', 's');
