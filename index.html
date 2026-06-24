@@ -272,67 +272,6 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
 .btn-ripple .ripple-effect{position:absolute;border-radius:50%;background:rgba(255,255,255,.5);transform:scale(0);animation:rippleAnim .55s ease-out;pointer-events:none}
 @keyframes rippleAnim{to{transform:scale(4);opacity:0}}
 .num-tabular{font-variant-numeric:tabular-nums;font-family:'Inter','Noto Sans TC',-apple-system,sans-serif}
-
-/* ===== 員工打卡頁 外觀改版(米白橘 · 範圍鎖 #pg-clock,boss 不受影響)===== */
-#pg-clock{ background:#F2EFE8; }
-#pg-clock .banner.emp{ background:#FBFAF6; border-bottom:1px solid #E6E1D7; color:#1A1A1A; }
-#pg-clock .banner.emp::before{ display:none; }
-#pg-clock .banner-label{ color:#9C988F; opacity:1; letter-spacing:2px; text-transform:uppercase; font-size:10px; }
-#pg-clock .banner-name{ color:#1A1A1A; }
-#pg-clock .banner-btn{ background:transparent; border:1px solid #D6D1C6; color:#6B665C; }
-#pg-clock .store-bar{ background:#F2EFE8; border-bottom:1px solid #E6E1D7; }
-#pg-clock .store-bar-label{ color:#9C988F; }
-#pg-clock .store-bar-btn{ background:#FBFAF6; border:1px solid #E6E1D7; color:#1A1A1A; border-radius:10px; }
-#pg-clock .store-bar-btn.support{ background:#FDF3EA; border-color:#E27D2C; color:#C9691F; }
-#pg-clock .clock-time{ font-weight:300; color:#1A1A1A; letter-spacing:1px; }
-#pg-clock .clock-date{ color:#9C988F; letter-spacing:2px; }
-#pg-clock .gps-bar{ background:#FBFAF6; border:1px solid #E6E1D7; }
-#pg-clock .gps-ok{ color:#2E9E68; }
-#pg-clock .gps-detail{ color:#9C988F; }
-/* 打卡格(cell) */
-#pg-clock .punch-btn{ background:#FBFAF6; border:1px solid #E6E1D7; border-radius:14px; color:#1A1A1A; align-items:flex-start; justify-content:center; text-align:left; padding:15px 15px; gap:6px; }
-#pg-clock .punch-btn .pb-key{ font-size:11px; letter-spacing:.5px; color:#9C988F; font-weight:700; }
-#pg-clock .punch-btn .pb-cta{ font-size:15px; font-weight:800; color:#1A1A1A; }
-#pg-clock .punch-btn .pb-time{ font-size:18px; font-weight:800; color:#1A1A1A; font-variant-numeric:tabular-nums; }
-/* 下一個能打的 = 橘 */
-#pg-clock .punch-btn.in:not(.done), #pg-clock .punch-btn.out:not(.done){ background:#FDF3EA; border:1.5px solid #E27D2C; }
-#pg-clock .punch-btn.in:not(.done) .pb-cta, #pg-clock .punch-btn.out:not(.done) .pb-cta,
-#pg-clock .punch-btn.in:not(.done) .pb-key, #pg-clock .punch-btn.out:not(.done) .pb-key{ color:#C9691F; }
-/* 已打 / 未開放 = 灰 */
-#pg-clock .punch-btn.done{ background:#EBE7DD; border-color:transparent; color:#AAA498; }
-#pg-clock .punch-btn.done .pb-key, #pg-clock .punch-btn.done .pb-cta{ color:#B7B1A4; }
-#pg-clock .punch-btn.done .pb-time{ color:#7C7666; }
-#pg-clock .sec-title{ color:#9C988F; }
-/* 底部導覽(員工專用 .bnav)*/
-.bnav{ background:#FBFAF6; border-top:1px solid #E6E1D7; }
-.nb{ color:#9C988F; }
-.nb.active{ color:#1A1A1A; border-top-color:#E27D2C; }
-
-/* 打卡頁摘要列 */
-#pg-clock .clock-summary{ display:flex; justify-content:space-between; padding:8px 22px 6px; }
-#pg-clock .clock-summary .cs-it{ flex:1; text-align:center; cursor:default; }
-#pg-clock .clock-summary .cs-kpi{ cursor:pointer; }
-#pg-clock .clock-summary .cs-n{ font-size:24px; font-weight:300; color:#1A1A1A; font-variant-numeric:tabular-nums; }
-#pg-clock .clock-summary .cs-ic{ display:inline-flex; align-items:center; justify-content:center; color:#C9691F; height:24px; }
-#pg-clock .clock-summary .cs-ic svg{ width:23px; height:23px; }
-#pg-clock .clock-summary .cs-c{ font-size:11px; letter-spacing:.5px; color:#9C988F; margin-top:3px; }
-/* 時間已顯示在格子,隱藏舊的今日打卡紀錄 + 上方下對上提示列 */
-#pg-clock .sec, #pg-clock #today-records{ display:none; }
-#pg-clock #uw-entry-slot{ display:none; }
-
-/* ===== 請假 / 公告 / 月統計 同款米白橘(範圍鎖各頁,boss 不受影響)===== */
-#pg-leave, #pg-notice, #pg-mymonth{ background:#F2EFE8; }
-#pg-leave .topbar, #pg-mymonth .topbar{ background:#FBFAF6; border-bottom:1px solid #E6E1D7; }
-#pg-leave .topbar-title, #pg-mymonth .topbar-title{ color:#1A1A1A; }
-#pg-leave .topbar-sub, #pg-mymonth .topbar-sub{ color:#9C988F; }
-#pg-leave .leave-type.selected{ border-color:#E27D2C; background:#FDF3EA; }
-#pg-leave .leave-type.selected .leave-type-name{ color:#C9691F; }
-#pg-leave .action-btn.primary, #pg-notice .action-btn.primary, #pg-mymonth .action-btn.primary{ background:#E27D2C; }
-#pg-notice .banner.emp, #pg-notice .banner.mgr{ background:#FBFAF6; border-bottom:1px solid #E6E1D7; color:#1A1A1A; }
-#pg-notice .banner.emp::before, #pg-notice .banner.mgr::before{ display:none; }
-#pg-notice .banner-label{ color:#9C988F; opacity:1; }
-#pg-notice .banner-name{ color:#1A1A1A; }
-#pg-mymonth .card, #pg-leave .card{ background:#FBFAF6; border:1px solid #E6E1D7; box-shadow:none; }
 </style>
 </head>
 <body>
@@ -385,15 +324,10 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
   </div>
   <div id="uw-entry-slot"></div>
   <div class="punch-grid">
-    <button class="punch-btn in"  id="pb-in1"  onclick="openConfirm('IN1')"><span class="pb-key">上班 · 第一段</span><span class="pb-cta">點此打卡 →</span></button>
-    <button class="punch-btn out" id="pb-out1" onclick="openConfirm('OUT1')"><span class="pb-key">下班 · 第一段</span><span class="pb-cta">點此打卡 →</span></button>
-    <button class="punch-btn in"  id="pb-in2"  onclick="openConfirm('IN2')"><span class="pb-key">上班 · 第二段</span><span class="pb-cta">點此打卡 →</span></button>
-    <button class="punch-btn out" id="pb-out2" onclick="openConfirm('OUT2')"><span class="pb-key">下班 · 第二段</span><span class="pb-cta">點此打卡 →</span></button>
-  </div>
-  <div class="clock-summary">
-    <div class="cs-it"><div class="cs-n" id="cs-hours">0</div><div class="cs-c">今日工時</div></div>
-    <div class="cs-it"><div class="cs-n" id="cs-annual">—</div><div class="cs-c">特休剩餘</div></div>
-    <div class="cs-it cs-kpi" onclick="openUpwardFromHome()"><div class="cs-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div><div class="cs-c">下對上評核</div></div>
+    <button class="punch-btn in"  id="pb-in1"  onclick="openConfirm('IN1')"><span>🟢</span><span>上班打卡</span><span class="punch-btn-sub">第一段</span></button>
+    <button class="punch-btn out" id="pb-out1" onclick="openConfirm('OUT1')"><span>🔵</span><span>下班打卡</span><span class="punch-btn-sub">第一段</span></button>
+    <button class="punch-btn in"  id="pb-in2"  onclick="openConfirm('IN2')"><span>🟢</span><span>上班打卡</span><span class="punch-btn-sub">第二段</span></button>
+    <button class="punch-btn out" id="pb-out2" onclick="openConfirm('OUT2')"><span>🔵</span><span>下班打卡</span><span class="punch-btn-sub">第二段</span></button>
   </div>
   <div class="sec"><div class="sec-title">今日打卡紀錄</div></div>
   <div id="today-records"></div>
@@ -404,18 +338,18 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
 <div class="page" id="pg-leave">
   <div class="topbar"><div><div class="topbar-title">申請假單</div><div class="topbar-sub" id="leave-sub">載入中</div></div></div>
   <!-- 特休剩餘天數 -->
-  <div id="annual-leave-banner" style="display:none;margin:8px 14px 0;background:#FBFAF6;border:1px solid #E6E1D7;border-left:4px solid #E27D2C;border-radius:14px;padding:14px;color:#1A1A1A">
+  <div id="annual-leave-banner" style="display:none;margin:8px 14px 0;background:linear-gradient(135deg,var(--pd),var(--p));border-radius:14px;padding:14px;color:#fff">
     <div style="display:flex;align-items:center;gap:12px">
       <div class="alb-num" style="font-size:38px;font-weight:900;line-height:1">7</div>
       <div style="flex:1">
         <div style="font-size:13px;font-weight:800">剩餘特休天數</div>
-        <div class="alb-sub" style="font-size:11px;color:#9C988F;margin-top:3px">年度 14 天・已用 7 天</div>
-        <div style="background:#EDE7DC;border-radius:10px;height:5px;margin-top:8px">
-          <div class="alb-bar" style="background:#E27D2C;border-radius:10px;height:5px;width:50%"></div>
+        <div class="alb-sub" style="font-size:11px;opacity:.8;margin-top:3px">年度 14 天・已用 7 天</div>
+        <div style="background:rgba(255,255,255,.25);border-radius:10px;height:5px;margin-top:8px">
+          <div class="alb-bar" style="background:#fff;border-radius:10px;height:5px;width:50%"></div>
         </div>
       </div>
     </div>
-    <div style="font-size:11px;color:#9C988F;margin-top:8px;border-top:1px solid #E6E1D7;padding-top:8px">特休天數依到職日每年重置，如有疑問請洽門市主管</div>
+    <div style="font-size:11px;opacity:.7;margin-top:8px;border-top:1px solid rgba(255,255,255,.2);padding-top:8px">特休天數依到職日每年重置，如有疑問請洽門市主管</div>
   </div>
   <div class="sec" style="padding-top:12px"><div class="sec-title">選擇假別</div></div>
   <div class="leave-grid" id="leave-type-grid"></div>
@@ -1088,7 +1022,7 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
     <div><div class="banner-label">公告</div><div class="banner-name">📅 年度行事曆</div></div>
   </div>
 
-  <div id="notice-content" style="padding:14px;background:#F2EFE8;min-height:60vh">
+  <div id="notice-content" style="padding:14px;background:#f9fafb;min-height:60vh">
     <!-- 載入狀態 -->
     <div id="notice-loading" style="text-align:center;color:#9ca3af;padding:40px 16px;font-size:13px">載入中…</div>
 
@@ -1653,9 +1587,9 @@ function setupDualModeBar(){
   if (!bar){
     bar = document.createElement('div');
     bar.id = 'dual-mode-bar';
-    bar.style.cssText = 'flex-shrink:0;z-index:9999;background:#FBFAF6;border-bottom:1px solid #E6E1D7;padding:10px 14px 8px';
+    bar.style.cssText = 'flex-shrink:0;z-index:9999;background:linear-gradient(135deg,#5C2818 0%,#A0503A 50%,#D4836A 100%);padding:10px 14px 8px';
     bar.innerHTML =
-      '<div style="display:flex;background:#EFEBE1;border-radius:11px;padding:4px;gap:4px">' +
+      '<div style="display:flex;background:rgba(255,255,255,.18);border-radius:11px;padding:4px;gap:4px">' +
       '<button id="dm-self" onclick="switchDualMode(\'self\')">🕐 我的</button>' +
       '<button id="dm-mgr" onclick="switchDualMode(\'mgr\')">🧑‍💼 主管功能</button>' +
       '</div>';
@@ -1671,11 +1605,11 @@ function applyDualModeStyle(){
   const self = document.getElementById('dm-self'), mgr = document.getElementById('dm-mgr');
   if (!self || !mgr) return;
   const base = 'flex:1;padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:800;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;transition:.15s;';
-  const on = 'background:#fff;color:#1A1A1A;box-shadow:0 1px 3px rgba(0,0,0,.12)';
-  const off = 'background:transparent;color:#9C988F';
+  const on = 'background:#fff;color:#7D3D2C;box-shadow:0 1px 3px rgba(0,0,0,.2)';
+  const off = 'background:transparent;color:rgba(255,255,255,.9)';
   const isMgr = (window._dualMode === 'mgr');
   const _bar = document.getElementById('dual-mode-bar');
-  if (_bar) _bar.style.background = '#FBFAF6';
+  if (_bar) _bar.style.background = isMgr ? 'linear-gradient(135deg,#3D1A0F 0%,#7D3D2C 50%,#A0503A 100%)' : 'linear-gradient(135deg,#5C2818 0%,#A0503A 50%,#D4836A 100%)';
   self.style.cssText = base + (isMgr ? off : on);
   mgr.style.cssText  = base + (isMgr ? on : off);
 }
@@ -2024,8 +1958,7 @@ function updatePunchBtns() {
     if (!btn) return;
     if (s[type]) {
       btn.disabled = true; btn.className = 'punch-btn done';
-      var _lbl = {IN1:'上班 · 第一段',OUT1:'下班 · 第一段',IN2:'上班 · 第二段',OUT2:'下班 · 第二段'}[type] || type;
-      btn.innerHTML = '<span class="pb-key">' + _lbl + '</span><span class="pb-time">✓ ' + s[type] + '</span>';
+      btn.innerHTML = '<span>✅</span><span>已打卡</span><span class="punch-btn-sub">' + type + ' ' + s[type] + '</span>';
     } else {
       const canPunch = gpsOk && (
         (type==='IN1' && !s.IN1) || (type==='OUT1' && s.IN1 && !s.OUT1) ||
@@ -2035,32 +1968,7 @@ function updatePunchBtns() {
       btn.className = 'punch-btn ' + (type.startsWith('IN') ? 'in' : 'out') + (canPunch ? '' : ' done');
     }
   });
-  if (typeof refreshClockSummary === 'function') refreshClockSummary();
 }
-
-// ⭐ 打卡頁摘要列:今日工時(同步)+ 特休剩餘(用現有 checkAnnualLeaveRemain,唯讀)
-async function refreshClockSummary(){
-  var hEl = document.getElementById('cs-hours');
-  if (hEl){
-    var h = 0;
-    if (punchState.IN1 && punchState.OUT1) h += timeDiff(punchState.IN1, punchState.OUT1);
-    if (punchState.IN2 && punchState.OUT2) h += timeDiff(punchState.IN2, punchState.OUT2);
-    hEl.textContent = (h > 0 ? (Math.round(h*10)/10).toFixed(1) : '0');
-  }
-  var aEl = document.getElementById('cs-annual');
-  if (aEl){
-    try { var r = await checkAnnualLeaveRemain(); aEl.textContent = String(Math.round(r*10)/10); }
-    catch(e){ aEl.textContent = '—'; }
-  }
-}
-// 中間格 → 下對上(沿用既有開放判斷,沒到時間不會打開)
-window.openUpwardFromHome = function(){
-  if (typeof upwardIsOpen === 'function' && !upwardIsOpen()){
-    if (window.upwardNotOpenYet) upwardNotOpenYet(); else if (window.toast) toast('主管評核尚未開放', 's');
-    return;
-  }
-  if (window.openUpward) openUpward();
-};
 
 window.openConfirm = function(type) {
   if (!gpsOk) { toast('❌ GPS 超出範圍，無法打卡', 'd'); return; }
@@ -2719,7 +2627,7 @@ window.loadMyMonth = async function() {
                 '<div style="font-size:13px;font-weight:800">剩餘特休天數</div>' +
                 '<div style="font-size:11px;opacity:.8;margin-top:2px">年度 '+annualTotal+' 天・已用 '+Math.round(usedDays)+' 天</div>' +
                 '<div style="font-size:11px;opacity:.7;margin-top:1px">到職日：'+empData.hireDate+'</div>' +
-                '<div style="background:#EDE7DC;border-radius:10px;height:5px;margin-top:8px">' +
+                '<div style="background:rgba(255,255,255,.25);border-radius:10px;height:5px;margin-top:8px">' +
                   '<div style="background:#fff;border-radius:10px;height:5px;width:'+annualPct+'%"></div>' +
                 '</div>' +
               '</div>' +
@@ -3848,7 +3756,7 @@ window.myMonthSwitchTab = function(tab){
     statSec.style.display = '';
     salarySec.style.display = 'none';
     tabStat.style.background = '#fff';
-    tabStat.style.color = '#C9691F';
+    tabStat.style.color = '#BE6148';
     tabStat.style.boxShadow = '0 1px 3px rgba(0,0,0,.08)';
     tabSalary.style.background = 'none';
     tabSalary.style.color = '#6B7280';
