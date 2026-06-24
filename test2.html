@@ -8340,6 +8340,40 @@ window.bossInlineUpdate = async function(empId, field, el, type){
   }
 };
 
+// ⭐ 門市:直接改(同時更新 storeId + storeName;資料綁內部 id 不受影響)
+window.bossInlineStore = async function(empId, el){
+  const emp = EMPLOYEES.find(e => e.id === empId);
+  if (!emp) return;
+  var sid = el.value;
+  var store = STORES.find(s => s.id === sid);
+  emp.storeId = sid;
+  emp.storeName = store ? store.name : '';
+  try {
+    await fbUpdate('employees/' + empId, { storeId: sid, storeName: emp.storeName });
+    el.style.background = '#F0FDF4';
+    setTimeout(() => { el.style.background = '#fff'; }, 700);
+    toast('✓ ' + emp.name + ' 已轉到 ' + (store ? store.name : ''), 's');
+  } catch(err){ toast('⚠️ 儲存失敗,請重試', 'e'); }
+};
+
+// ⭐ 員工編號:直接改(存檔前檢查不重複;重複就還原)
+window.bossInlineCode = async function(empId, el){
+  const emp = EMPLOYEES.find(e => e.id === empId);
+  if (!emp) return;
+  var code = (el.value || '').trim().toUpperCase();
+  if (!code){ toast('員工編號不能空白', 'e'); el.value = emp.code || ''; return; }
+  var dup = EMPLOYEES.find(e => e.id !== empId && e.code && e.code.toUpperCase() === code);
+  if (dup){ toast('⚠️ 此編號已被「' + dup.name + '」使用', 'e'); el.value = emp.code || ''; return; }
+  el.value = code;
+  emp.code = code;
+  try {
+    await fbUpdate('employees/' + empId, { code: code });
+    el.style.background = '#F0FDF4';
+    setTimeout(() => { el.style.background = '#fff'; }, 700);
+    toast('✓ ' + emp.name + ' 編號改為 ' + code, 's');
+  } catch(err){ toast('⚠️ 儲存失敗,請重試', 'e'); }
+};
+
 // ⭐ 出生年月日:改了同時自動帶生日獎金的月日
 window.bossInlineDob = async function(empId, el){
   const emp = EMPLOYEES.find(e => e.id === empId);
@@ -8449,8 +8483,10 @@ async function bossLoadEmpList(){
     
     html += '<tr>';
     html += '<td style="padding:9px;font-weight:700">' + e.name + (e.role==='manager'?' 👑':'') + (e.role==='superadmin'?' 🏆':'') + '</td>';
-    html += '<td style="padding:9px;font-family:monospace">' + e.code + '</td>';
-    html += '<td style="padding:9px">' + (store ? store.name : '—') + '</td>';
+    html += '<td style="padding:6px"><input value="' + (e.code||'') + '" onchange="bossInlineCode(\'' + e.id + '\',this)" oninput="this.value=this.value.toUpperCase()" title="可改成手機號;不可重複" style="width:100%;box-sizing:border-box;padding:5px 4px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:11px;font-family:monospace;text-transform:uppercase"></td>';
+    var _stOpts = STORES.filter(function(s){return s.active;}).map(function(s){return '<option value="'+s.id+'"'+(s.id===e.storeId?' selected':'')+'>'+s.name+'</option>';}).join('');
+    if (e.storeId && !STORES.some(function(s){return s.active && s.id===e.storeId;})){ _stOpts = '<option value="'+e.storeId+'" selected>'+(store?store.name:e.storeId)+'（停用）</option>' + _stOpts; }
+    html += '<td style="padding:6px"><select onchange="bossInlineStore(\'' + e.id + '\',this)" style="width:100%;box-sizing:border-box;padding:5px 3px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:11px;background:#fff">'+_stOpts+'</select></td>';
     // 職階 (下拉直接改)
     const posOpts = POS.map(p => '<option value="'+p+'"'+((e.position||'')===p?' selected':'')+'>'+p+'</option>').join('');
     html += '<td style="padding:6px;text-align:center"><select onchange="bossInlineUpdate(\''+e.id+'\',\'position\',this,\'str\')" style="width:100%;box-sizing:border-box;padding:5px 3px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:11.5px;background:#fff"><option value="">—</option>'+posOpts+'</select></td>';
