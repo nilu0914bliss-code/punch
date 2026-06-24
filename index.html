@@ -7152,7 +7152,7 @@ async function bossLoadDashboard(){
     todoEl.innerHTML = todos.map(t => '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + t.color + ';flex-shrink:0"></span>' + t.text + '</div>').join('');
   }
   
-  // ⭐ #1 特休折現提醒 (週年到期 30 天內、本週年度仍有未休特休 → 將折現)
+  // ⭐ #1 特休折現提醒 (週年到期 4 個月內、本週年度仍有未休特休 → 將折現)
   (function(){
     const warnEl = document.getElementById('boss-dash-annual-warn');
     if (!warnEl) return;
@@ -7176,7 +7176,7 @@ async function bossLoadDashboard(){
       if (remaining <= 0) return;
       const end = parseLocalDate(period.end);
       const daysLeft = Math.ceil((end - nowD) / 86400000);
-      if (daysLeft < 0 || daysLeft > 30) return;
+      if (daysLeft < 0 || daysLeft > 120) return;
       atRisk.push({name: e.name, remaining: Math.round(remaining*10)/10, daysLeft, endLabel: (end.getMonth()+1)+'/'+end.getDate()});
     });
     atRisk.sort((a,b)=>a.daysLeft-b.daysLeft);
