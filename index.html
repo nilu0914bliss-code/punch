@@ -657,7 +657,7 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
   <div class="setting-group-title">門市管理</div>
   <div class="setting-item" id="setting-store-item" onclick="openStoreSettings()"><div class="setting-icon" style="background:#eff6ff">🏪</div><div style="flex:1"><div class="setting-label">門市設定</div><div class="setting-sub">管理門市名稱、GPS 座標、打卡範圍</div></div><div class="setting-arrow">›</div></div>
   <div class="setting-item" onclick="openEmpSettings()"><div class="setting-icon" style="background:#f0fdf4">👥</div><div style="flex:1"><div class="setting-label">員工管理</div><div class="setting-sub">新增、編輯、停用員工</div></div><div class="setting-arrow">›</div></div>
-  <div class="setting-item" id="setting-annual-item" onclick="openAnnualSettings()"><div class="setting-icon" style="background:#eff6ff">🌴</div><div style="flex:1"><div class="setting-label">特休天數管理</div><div class="setting-sub">依到職日自動計算，符合勞基法</div></div><div class="setting-arrow">›</div></div>
+  <div class="setting-item" id="setting-annual-item" onclick="openAnnualSettings()"><div class="setting-icon" style="background:#eff6ff">🌴</div><div style="flex:1"><div class="setting-label">特休與到職日</div><div class="setting-sub">設到職日,自動算特休</div></div><div class="setting-arrow">›</div></div>
   <div class="setting-item" id="setting-batch-item" onclick="openBatchLeave()"><div class="setting-icon" style="background:#f0fdf4">📋</div><div style="flex:1"><div class="setting-label">批量補登特休</div><div class="setting-sub">補登員工系統上線前已請的特休</div></div><div class="setting-arrow">›</div></div>
   <div class="setting-item" onclick="openPatchPanel()"><div class="setting-icon" style="background:#fffbeb">📝</div><div style="flex:1"><div class="setting-label">補卡登記</div><div class="setting-sub">主管補登員工打卡紀錄</div></div><div class="setting-arrow">›</div></div>
   <div class="setting-item" onclick="openExportPanel()"><div class="setting-icon" style="background:#f0fdf4">📊</div><div style="flex:1"><div class="setting-label">匯出打卡資料</div><div class="setting-sub">匯出員工月打卡紀錄為 CSV</div></div><div class="setting-arrow">›</div></div>
@@ -703,7 +703,7 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
 <div class="page" id="pg-annual-settings">
   <div class="topbar">
     <button onclick="goBack()" style="width:34px;height:34px;border:none;background:var(--g1);border-radius:50%;cursor:pointer;font-size:16px">←</button>
-    <div><div class="topbar-title">特休天數管理</div><div class="topbar-sub">依勞基法自動計算</div></div>
+    <div><div class="topbar-title">特休與到職日</div><div class="topbar-sub">設到職日,自動算特休</div></div>
   </div>
   <div id="superadmin-store-bar-pg-annual" style="display:none;background:#7D3D2C;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.1)">
     <div style="display:flex;align-items:center;gap:8px">
@@ -9538,7 +9538,7 @@ initApp().then(() => {
 
     <!-- ⭐ 特休管理 -->
     <section class="boss-section" id="boss-sec-annual" style="display:none">
-      <h2 style="font-size:18px;font-weight:800;color:#7D3D2C;margin-bottom:14px">特休管理 <span style="font-size:12px;font-weight:400;color:#9CA3AF">依到職日自動計算 (勞基法)</span></h2>
+      <h2 style="font-size:18px;font-weight:800;color:#7D3D2C;margin-bottom:14px">特休與到職日 <span style="font-size:12px;font-weight:400;color:#9CA3AF">設到職日,自動算特休</span></h2>
       <div id="boss-annual-content" style="background:#fff;border-radius:11px;padding:13px;overflow-x:auto">
         <div style="text-align:center;color:#9CA3AF;padding:30px">載入中…</div>
       </div>
