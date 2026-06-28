@@ -3866,6 +3866,8 @@ async function renderMySalary(){
   monthData.standardHours = await getMonthWH(salYear, salMonth);
   const _selfYm = salYear + '-' + String(salMonth).padStart(2,'0');
   const _selfKpi = await fbGet('kpi/' + _selfYm + '/' + emp.id) || {};
+  const _selfCal = await fbGet('calendar/' + _selfYm) || {};
+  const _typhoonH = _selfCal.typhoonHours || 0;
   monthData.disciplineScore = _selfKpi.discipline !== undefined ? _selfKpi.discipline : 10;
   monthData.isBirthdayMonth = isBirthdayThisMonth(emp.birthday, salYear, salMonth);
   
@@ -3937,6 +3939,9 @@ async function renderMySalary(){
   // ─ 無薪 ─
   html += sectionLabel('無薪 (0% 薪)', '#c00');
   html += row('📝 事假', (monthData.personalH || monthData.noneLeaveH || 0) + ' h');
+  
+  // ─ 颱風假(全店·記錄用,不計薪;颱風缺勤已反映在打卡時數)─
+  html += '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;border-top:1px dashed #E6D2C8;margin-top:4px;color:#9A6A4F"><span>🌀 颱風假</span><span style="font-weight:700">' + _typhoonH + ' h</span></div>';
   
   html += '</div>';
   
@@ -8867,7 +8872,7 @@ async function bossBatchLoad(){
   const data = await Promise.all(months.map(mm => fbGet('calendar/' + mm.ym)));
   bossState.batchMonths = months.map((mm, i) => {
     const cal = data[i] || {};
-    return {y: mm.y, m: mm.m, ym: mm.ym, workHours: cal.workHours || monthlyHours || 176, holidays: [...(cal.holidays || [])]};
+    return {y: mm.y, m: mm.m, ym: mm.ym, workHours: cal.workHours || monthlyHours || 176, typhoonHours: cal.typhoonHours || 0, holidays: [...(cal.holidays || [])]};
   });
   bossBatchRender();
 }
@@ -8898,6 +8903,7 @@ function bossBatchRender(){
     html += '<div style="border:1.5px solid #ECE3DF;border-radius:11px;padding:11px;background:#FFFDFC">'
       + '<div style="font-size:13px;font-weight:800;color:#7D3D2C;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center">' + roc(mo.y) + '年' + mo.m + '月' + (isCurrent ? '<span style="font-size:9px;font-weight:700;color:#BE6148;background:#FDF0ED;border-radius:20px;padding:1px 7px">本月</span>' : '') + '</div>'
       + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px"><span style="font-size:10px;color:#374151;white-space:nowrap">月基本工時</span><input type="number" min="1" max="300" value="' + mo.workHours + '" onchange="bossBatchSetHours(' + mi + ',this.value)" style="flex:1;padding:5px 7px;font-size:12px;border:1.5px solid #D1D5DB;border-radius:6px;text-align:center;box-sizing:border-box"></div>'
+      + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px"><span style="font-size:10px;color:#9A6A4F;white-space:nowrap">颱風假時數</span><input type="number" min="0" max="300" step="0.5" value="' + (mo.typhoonHours || 0) + '" onchange="bossBatchSetTyphoon(' + mi + ',this.value)" title="純記錄用,目前不影響薪資計算" style="flex:1;padding:5px 7px;font-size:12px;border:1.5px solid #E6D2C8;border-radius:6px;text-align:center;box-sizing:border-box;background:#FDF7F4"></div>'
       + '<table style="width:100%;border-collapse:collapse"><thead><tr>' + head + '</tr></thead><tbody>' + cells + '</tbody></table></div>';
   });
   gridEl.innerHTML = html;
@@ -8924,6 +8930,11 @@ window.bossBatchSetHours = function(mi, val){
   if (mo) mo.workHours = parseInt(val) || mo.workHours;
 };
 
+window.bossBatchSetTyphoon = function(mi, val){
+  const mo = (bossState.batchMonths || [])[mi];
+  if (mo){ const v = parseFloat(val); mo.typhoonHours = (isNaN(v) || v < 0) ? 0 : v; }
+};
+
 window.bossBatchApplyHours = function(){
   const v = parseInt(document.getElementById('boss-batch-apply-hours').value);
   const msg = document.getElementById('boss-batch-msg');
@@ -8941,6 +8952,7 @@ window.bossBatchSaveAll = async function(){
     for (const mo of (bossState.batchMonths || [])){
       await fbUpdate('calendar/' + mo.ym, {
         workHours: mo.workHours,
+        typhoonHours: mo.typhoonHours || 0,
         holidays: mo.holidays,
         setBy: (currentUser || {}).id,
         setAt: new Date().toISOString()
@@ -9774,7 +9786,8 @@ initApp().then(() => {
         <div style="background:#F0F9FF;border-left:3px solid #0c4a6e;padding:9px 12px;border-radius:6px;font-size:11px;color:#374151;line-height:1.7;margin-bottom:10px">
           ℹ️ 這裡設定兩件事(用途不同):<br>
           · <b>月基本工時</b> = 員工每月應出勤時數(算薪資用)<br>
-          · <b>月曆公休</b> = 店哪天公休(算業績登錄漏天數用)
+          · <b>月曆公休</b> = 店哪天公休(算業績登錄漏天數用)<br>
+          · <b>颱風假時數</b> = 僅記錄用,不影響薪資(颱風缺勤已由打卡時數自動反映)
         </div>
         <div style="font-size:11.5px;color:#6B7280;margin-bottom:12px;line-height:1.6">一次設完一整年:每月填月基本工時、點月曆設公休日,最後按一次「儲存一整年」。可先用下方一鍵把同一個工時套用到全部月份。</div>
         <div style="display:flex;align-items:center;gap:8px;background:#FDF0ED;border-radius:9px;padding:10px 12px;margin-bottom:14px;flex-wrap:wrap">
