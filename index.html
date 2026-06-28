@@ -42,7 +42,7 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
 .login-sub{font-size:13px;color:rgba(255,255,255,.75);margin-bottom:28px;text-align:center;letter-spacing:1px}
 .login-card{background:#fff;border-radius:20px;padding:24px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
 .login-label{font-size:13px;font-weight:700;color:var(--g6);margin-bottom:7px}
-.login-input{width:100%;padding:14px;border:2px solid var(--g2);border-radius:11px;font-size:20px;font-weight:800;letter-spacing:5px;text-align:center;outline:none;font-family:inherit;transition:border-color .15s;text-transform:uppercase}
+.login-input{width:100%;padding:14px;border:2px solid var(--g2);border-radius:11px;font-size:20px;font-weight:800;letter-spacing:5px;text-align:center;outline:none;font-family:inherit;transition:border-color .15s}
 .login-input:focus{border-color:var(--p)}
 .login-btn{width:100%;padding:14px;margin-top:11px;background:linear-gradient(135deg,#A0503A,#BE6148);color:#fff;border:none;border-radius:11px;font-size:16px;font-weight:800;cursor:pointer;letter-spacing:2px;transition:transform .12s;position:relative;overflow:hidden}
 .login-btn:active{transform:scale(.97)}
@@ -287,7 +287,7 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
   <div class="login-sub">員工打卡管理系統</div>
   <div class="login-card">
     <div class="login-label">員工編號</div>
-    <input class="login-input" id="login-code" type="text" placeholder="EMP001" maxlength="12"
+    <input class="login-input" id="login-code" type="text" placeholder="09xxxxxxx" maxlength="12"
       oninput="checkIfAdmin()" onkeydown="if(event.key==='Enter')login()">
     <div id="pw-section" style="display:none;margin-top:10px">
       <div class="login-label">密碼</div>
@@ -5489,6 +5489,7 @@ window.reloadPatchEmpList = async function() {
     .filter(e => e && e.active !== false);
 
   // 渲染下拉(用 optgroup 分組)
+  const _prevEmpSel = empSel.value;  // 記住目前選的員工,避免重建下拉時被洗成第一人(補卡選錯人 bug)
   empSel.innerHTML = '';
 
   const og1 = document.createElement('optgroup');
@@ -5512,6 +5513,11 @@ window.reloadPatchEmpList = async function() {
       og2.appendChild(opt);
     });
     empSel.appendChild(og2);
+  }
+
+  // 還原先前選的員工(若仍在清單中)— 修正改日期/重整時下拉跳成第一人、害補卡送錯人的 bug
+  if (_prevEmpSel && Array.from(empSel.options).some(o => o.value === _prevEmpSel)) {
+    empSel.value = _prevEmpSel;
   }
 }
 
