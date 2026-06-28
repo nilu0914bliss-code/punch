@@ -8082,12 +8082,14 @@ async function bossLoadPayroll(){
   
   // ⚡ 一次抓全部資料 (打卡 + 假單 + 已存薪資 + KPI),不要重複抓
   const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
-  const [allPunches, allLeaves, savedSalaries, kpiData] = await Promise.all([
+  const [allPunches, allLeaves, savedSalaries, kpiData, calData] = await Promise.all([
     fbGet('punches'),
     fbGet('leaves'),
     fbGet('salaries/' + yyyymm),
-    fbGet('kpi/' + yyyymm)
+    fbGet('kpi/' + yyyymm),
+    fbGet('calendar/' + yyyymm)
   ]);
+  bossState.payrollTyphoonH = (calData && calData.typhoonHours) || 0;
   const savedSalariesObj = savedSalaries || {};
   const kpiDataObj = kpiData || {};
   const prefetched = {punches: allPunches, leaves: allLeaves};
@@ -8160,7 +8162,10 @@ function renderPayrollTable(rows){
     return;
   }
   
-  let html = '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button onclick="bossExportPayrollCSV()" style="padding:8px 15px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer">📥 下載薪資總表(報勞保/稽核用)</button></div>';
+  let html = '';
+  const _payTyH = (typeof bossState !== 'undefined' && bossState.payrollTyphoonH) || 0;
+  if (_payTyH > 0) html += '<div style="background:#FDF0ED;border-left:3px solid #BE6148;border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:12.5px;font-weight:700;color:#7D3D2C">🌀 本月全店颱風假 ' + _payTyH + ' h</div>';
+  html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button onclick="bossExportPayrollCSV()" style="padding:8px 15px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer">📥 下載薪資總表(報勞保/稽核用)</button></div>';
   html += '<table style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap"><thead>';
   // 雙層表頭 (跟老闆紙本一樣)
   html += '<tr style="background:#F9FAFB">';
