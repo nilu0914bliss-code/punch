@@ -1096,6 +1096,32 @@ function roc(y){ return Number(y) - 1911; }
 function rocSlash(s){ if(!s) return s; var p=String(s).split(/[-\/]/); if(p.length<3) return s; return (Number(p[0])-1911)+'/'+Number(p[1])+'/'+Number(p[2]); }
 function rocTL(dt){ var d=(dt instanceof Date)?dt:new Date(dt); if(isNaN(d.getTime())) return ''; return (d.getFullYear()-1911)+'/'+(d.getMonth()+1)+'/'+d.getDate(); }
 
+// ── 民國出生年月日選單(顯示民國、回傳西元;只改輸入長相,儲存仍為西元 YYYY-MM-DD)──
+function dobROCselects(idBase, val, onchangeCall){
+  var y='',mo='',da='';
+  if(val){ var p=String(val).split('-'); if(p.length===3){ y=p[0]; mo=String(parseInt(p[1],10)); da=String(parseInt(p[2],10)); } }
+  var rocY = y ? (Number(y)-1911) : '';
+  var oc = onchangeCall ? (" onchange=\"" + onchangeCall + "('" + idBase + "')\"") : '';
+  var curROC = (new Date().getFullYear()-1911);
+  var yOpt='<option value="">年</option>';
+  for(var ry=curROC; ry>=30; ry--){ yOpt += '<option value="'+ry+'"'+((rocY!=='' && Number(rocY)===ry)?' selected':'')+'>'+ry+'</option>'; }
+  var mOpt='<option value="">月</option>';
+  for(var mn=1;mn<=12;mn++){ mOpt += '<option value="'+mn+'"'+((mo!=='' && Number(mo)===mn)?' selected':'')+'>'+mn+'</option>'; }
+  var dOpt='<option value="">日</option>';
+  for(var dn=1;dn<=31;dn++){ dOpt += '<option value="'+dn+'"'+((da!=='' && Number(da)===dn)?' selected':'')+'>'+dn+'</option>'; }
+  var st='padding:5px 4px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;background:#fff;font-family:inherit;';
+  return '<select id="'+idBase+'-y"'+oc+' style="'+st+'">'+yOpt+'</select>'
+       + '<select id="'+idBase+'-m"'+oc+' style="'+st+'margin-left:3px">'+mOpt+'</select>'
+       + '<select id="'+idBase+'-d"'+oc+' style="'+st+'margin-left:3px">'+dOpt+'</select>';
+}
+function dobROCval(idBase){
+  var y=(document.getElementById(idBase+'-y')||{}).value||'';
+  var mo=(document.getElementById(idBase+'-m')||{}).value||'';
+  var da=(document.getElementById(idBase+'-d')||{}).value||'';
+  if(!y||!mo||!da) return '';
+  return (Number(y)+1911)+'-'+String(mo).padStart(2,'0')+'-'+String(da).padStart(2,'0');
+}
+
 // ── UI ripple effect 函數 ──
 window.rippleAt = function(e) {
   if (!e) return;
@@ -8395,6 +8421,13 @@ window.bossInlineCode = async function(empId, el){
 };
 
 // ⭐ 出生年月日:改了同時自動帶生日獎金的月日
+// 表格內民國選單變動 → 轉西元 → 走原本 bossInlineDob 存檔(三格湊齊才存)
+window.bossInlineDobROC = function(idBase){
+  var empId = idBase.replace('bidob-','');
+  var v = dobROCval(idBase);
+  if (v) bossInlineDob(empId, {value:v, style:{}});
+};
+
 window.bossInlineDob = async function(empId, el){
   const emp = EMPLOYEES.find(e => e.id === empId);
   if (!emp) return;
@@ -8512,7 +8545,7 @@ async function bossLoadEmpList(){
     const posOpts = POS.map(p => '<option value="'+p+'"'+((e.position||'')===p?' selected':'')+'>'+p+'</option>').join('');
     html += '<td style="padding:6px;text-align:center"><select onchange="bossInlineUpdate(\''+e.id+'\',\'position\',this,\'str\')" style="width:100%;box-sizing:border-box;padding:5px 3px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:11.5px;background:#fff"><option value="">—</option>'+posOpts+'</select></td>';
     // 出生年月日 (直接改;自動帶生日獎金月日)
-    html += '<td style="padding:6px;text-align:center"><input type="date" value="'+(e.dob||'')+'" onchange="bossInlineDob(\''+e.id+'\',this)" style="width:100%;box-sizing:border-box;padding:5px 2px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:10.5px"></td>';
+    html += '<td style="padding:6px;text-align:center;white-space:nowrap">' + dobROCselects('bidob-'+e.id, e.dob||'', 'bossInlineDobROC') + '</td>';
     // 身分證 (直接改)
     html += '<td style="padding:6px;text-align:center"><input value="'+(e.idNumber||'')+'" placeholder="—" onchange="bossInlineUpdate(\''+e.id+'\',\'idNumber\',this,\'upper\')" style="width:100%;box-sizing:border-box;padding:5px 3px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:11px;text-transform:uppercase;text-align:center"></td>';
     // 健保級距 (數字直接改;會自動算勞健保自付)
@@ -9217,7 +9250,7 @@ window.bossEditEmp = function(empId){
   
   document.getElementById('boss-emp-modal-health').value = emp.healthGrade || '';
   document.getElementById('boss-emp-modal-idnum').value = emp.idNumber || '';
-  document.getElementById('boss-emp-modal-dob').value = emp.dob || '';
+  document.getElementById('boss-emp-modal-dob-sel').innerHTML = dobROCselects('bemdDob', emp.dob||'', '');
   document.getElementById('boss-emp-modal-hire').value = emp.hireDate || '';
   
   document.getElementById('boss-emp-modal').style.display = 'flex';
@@ -9288,7 +9321,7 @@ window.bossSaveEmp = async function(){
   const healthGrade = parseInt(document.getElementById('boss-emp-modal-health').value) || 0;
   const hireDate = document.getElementById('boss-emp-modal-hire').value;
   const idNumber = (document.getElementById('boss-emp-modal-idnum').value || '').trim().toUpperCase();
-  const dob = document.getElementById('boss-emp-modal-dob').value || '';
+  const dob = dobROCval('bemdDob');
   
   // 生日(月日)自動從出生年月日推導;沒填出生年月日就保留原本生日
   let birthday = emp.birthday || '';
@@ -9779,7 +9812,7 @@ initApp().then(() => {
       <div style="margin-bottom:11px"><div style="font-size:12px;font-weight:700;margin-bottom:5px">職階</div><select id="boss-emp-modal-position" onchange="var g=document.getElementById('boss-emp-modal-health'); if(g) g.value=posInsuranceGrade(this.value)" style="width:100%;padding:10px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:13px;box-sizing:border-box"></select></div>
       <div style="margin-bottom:11px"><div style="font-size:12px;font-weight:700;margin-bottom:5px">所屬門市</div><select id="boss-emp-modal-store" style="width:100%;padding:10px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:13px;box-sizing:border-box"></select></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px">
-        <div><div style="font-size:12px;font-weight:700;margin-bottom:5px">出生年月日</div><input type="date" id="boss-emp-modal-dob" style="width:100%;padding:10px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:13px;box-sizing:border-box"></div>
+        <div><div style="font-size:12px;font-weight:700;margin-bottom:5px">出生年月日（民國）</div><div id="boss-emp-modal-dob-sel" style="display:flex;gap:4px"></div></div>
         <div><div style="font-size:12px;font-weight:700;margin-bottom:5px">身分證字號</div><input id="boss-emp-modal-idnum" placeholder="A123456789" style="width:100%;padding:10px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:13px;box-sizing:border-box;text-transform:uppercase"></div>
       </div>
       <div style="font-size:11px;color:#9CA3AF;margin-bottom:11px">💡 生日獎金會自動用「出生年月日」的月/日判斷,不用另外填生日。</div>
