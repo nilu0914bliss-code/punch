@@ -8426,8 +8426,16 @@ window.bossInlineDobROC = function(idBase){
   var empId = idBase.replace('bidob-','');
   var v = dobROCval(idBase);
   if (!v) return;
-  var ds = document.getElementById(idBase+'-d');   // 真正的「日」下拉,用來閃綠回饋
-  bossInlineDob(empId, {value:v, style:(ds ? ds.style : {})});
+  // 整格閃綠回饋(不管改年/月/日都一致),閃完還原原底色
+  var yEl = document.getElementById(idBase+'-y');
+  var cell = yEl && yEl.parentElement ? yEl.parentElement : null;
+  if (cell){
+    var orig = cell.style.background || '';
+    cell.style.transition = 'background .2s';
+    cell.style.background = '#D1FAE5';
+    setTimeout(function(){ cell.style.background = orig; }, 800);
+  }
+  bossInlineDob(empId, {value:v, style:{}});  // 存檔交給原函式;傳替身避免它再動到元素
 };
 
 window.bossInlineDob = async function(empId, el){
