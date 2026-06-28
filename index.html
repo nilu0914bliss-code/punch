@@ -8425,7 +8425,9 @@ window.bossInlineCode = async function(empId, el){
 window.bossInlineDobROC = function(idBase){
   var empId = idBase.replace('bidob-','');
   var v = dobROCval(idBase);
-  if (v) bossInlineDob(empId, {value:v, style:{}});
+  if (!v) return;
+  var ds = document.getElementById(idBase+'-d');   // 真正的「日」下拉,用來閃綠回饋
+  bossInlineDob(empId, {value:v, style:(ds ? ds.style : {})});
 };
 
 window.bossInlineDob = async function(empId, el){
