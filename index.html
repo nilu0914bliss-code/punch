@@ -2631,7 +2631,7 @@ window.loadMyMonth = async function() {
               '<div style="flex:1">' +
                 '<div style="font-size:13px;font-weight:800">剩餘特休天數</div>' +
                 '<div style="font-size:11px;opacity:.8;margin-top:2px">年度 '+annualTotal+' 天・已用 '+Math.round(usedDays)+' 天</div>' +
-                '<div style="font-size:11px;opacity:.7;margin-top:1px">到職日：'+empData.hireDate+'</div>' +
+                '<div style="font-size:11px;opacity:.7;margin-top:1px">到職日：'+rocSlash(empData.hireDate)+'</div>' +
                 '<div style="background:rgba(255,255,255,.25);border-radius:10px;height:5px;margin-top:8px">' +
                   '<div style="background:#fff;border-radius:10px;height:5px;width:'+annualPct+'%"></div>' +
                 '</div>' +
@@ -4947,8 +4947,8 @@ async function renderAnnualList() {
           if (!y||!m||!d) { toast('⚠️ 請選擇完整到職日', 'd'); return; }
           const val = y+'-'+m+'-'+d;
           if (val === oldHireDate) { toast('沒有變更', ''); return; }
-          const oldDisplay = oldHireDate || '未設定';
-          if (!confirm('確定修改「' + empName + '」的到職日？\n\n原本：' + oldDisplay + '\n改為：' + val + '\n\n此修改會直接影響該員工的特休天數計算。')) return;
+          const oldDisplay = oldHireDate ? rocSlash(oldHireDate) : '未設定';
+          if (!confirm('確定修改「' + empName + '」的到職日？\n\n原本：' + oldDisplay + '\n改為：' + rocSlash(val) + '\n\n此修改會直接影響該員工的特休天數計算。')) return;
           await fbUpdate('employees/'+empId, {hireDate: val});
           const empIdx = EMPLOYEES.findIndex(x=>x.id===empId);
           if (empIdx>=0) EMPLOYEES[empIdx].hireDate = val;
@@ -6269,7 +6269,7 @@ async function showAnnualHistory(empId, empName, hireDate) {
   if (!modal) return;
 
   titleEl.textContent = empName ? empName + '・特休歷史' : '特休歷史紀錄';
-  subEl.textContent = '到職日：' + (hireDate || '未設定');
+  subEl.textContent = '到職日：' + (hireDate ? rocSlash(hireDate) : '未設定');
   body.innerHTML = '<div style="text-align:center;color:var(--g4);padding:20px">載入中…</div>';
   modal.style.display = 'flex';
 
@@ -7394,7 +7394,7 @@ async function bossLoadAnnual(){
     html += '<tr style="' + rowBg + '"><td style="padding:9px;font-weight:700">' + e.name + '</td>';
     html += '<td style="padding:9px;text-align:center">' + (e.position || '—') + '</td>';
     html += '<td style="padding:9px">' + (store ? store.name : '—') + '</td>';
-    html += '<td style="padding:9px">' + (e.hireDate || '—') + '</td>';
+    html += '<td style="padding:9px">' + (e.hireDate ? rocSlash(e.hireDate) : '—') + '</td>';
     html += '<td style="padding:9px">' + yearsStr + '</td>';
     html += '<td style="padding:9px;text-align:right;color:' + (_avgWH!=null?'#7D3D2C':'#D1D5DB') + ';font-weight:' + (_avgWH!=null?'700':'400') + '">' + _avgWHStr + '</td>';
     html += '<td style="padding:9px;text-align:right">' + total + '</td>';
@@ -9054,7 +9054,7 @@ async function bossLoadBatch(){
       html += '<div style="display:flex;align-items:center;gap:10px">';
       html += '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7D3D2C,#BE6148);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800">' + (e.name?e.name[0]:'?') + '</div>';
       html += '<div><div style="font-weight:800;font-size:14px">' + e.name + '</div>';
-      html += '<div style="font-size:11px;color:#6B7280;margin-top:2px">' + e.code + ' · 到職 ' + (e.hireDate||'未設定') + ' · 年度 ' + total + ' 天 · 本年度已休 ' + usedThisYear + ' 天</div>';
+      html += '<div style="font-size:11px;color:#6B7280;margin-top:2px">' + e.code + ' · 到職 ' + (e.hireDate?rocSlash(e.hireDate):'未設定') + ' · 年度 ' + total + ' 天 · 本年度已休 ' + usedThisYear + ' 天</div>';
       html += '</div></div>';
       html += '<span style="background:' + (remain<=0?'#FEE2E2':'#FDF0ED') + ';color:' + (remain<=0?'#991b1b':'#BE6148') + ';padding:5px 12px;border-radius:18px;font-size:12px;font-weight:700">' + (remain<=0?'已用完':'剩 ' + remain + ' 天') + '</span>';
       html += '</div>';
@@ -9230,7 +9230,7 @@ window.bossOpenEmpDetail = function(empId){
   bossEmpDetailId = empId;
   const store = STORES.find(function(s){return s.id===emp.storeId;});
   document.getElementById('ed-name').textContent = emp.name + ' (' + emp.code + ')';
-  document.getElementById('ed-basic').innerHTML = '職階 '+(emp.position||'—')+'\u3000·\u3000'+(store?store.name:'—')+'\u3000·\u3000到職 '+(emp.hireDate||'—');
+  document.getElementById('ed-basic').innerHTML = '職階 '+(emp.position||'—')+'\u3000·\u3000'+(store?store.name:'—')+'\u3000·\u3000到職 '+(emp.hireDate?rocSlash(emp.hireDate):'—');
   document.getElementById('ed-personal').innerHTML = '出生 '+(emp.dob||'—')+'\u3000·\u3000身分證 '+(emp.idNumber||'—')+'\u3000·\u3000健保級距 '+((emp.healthGrade||posInsuranceGrade(emp.position))||'—');
   const ec = emp.emergencyContact || {};
   document.getElementById('ed-ecname').value = ec.name||'';
