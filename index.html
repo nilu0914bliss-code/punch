@@ -1101,7 +1101,7 @@ function dobROCselects(idBase, val, onchangeCall){
   var y='',mo='',da='';
   if(val){ var p=String(val).split('-'); if(p.length===3){ y=p[0]; mo=String(parseInt(p[1],10)); da=String(parseInt(p[2],10)); } }
   var rocY = y ? (Number(y)-1911) : '';
-  var oc = onchangeCall ? (" onchange=\"" + onchangeCall + "('" + idBase + "')\"") : '';
+  var oc = onchangeCall ? (" onchange=\"" + onchangeCall + "('" + idBase + "', this)\"") : '';
   var curROC = (new Date().getFullYear()-1911);
   var yOpt='<option value="">年</option>';
   for(var ry=curROC; ry>=30; ry--){ yOpt += '<option value="'+ry+'"'+((rocY!=='' && Number(rocY)===ry)?' selected':'')+'>'+ry+'</option>'; }
@@ -8421,21 +8421,21 @@ window.bossInlineCode = async function(empId, el){
 };
 
 // ⭐ 出生年月日:改了同時自動帶生日獎金的月日
-// 表格內民國選單變動 → 轉西元 → 走原本 bossInlineDob 存檔(三格湊齊才存)
-window.bossInlineDobROC = function(idBase){
+// 表格內民國選單變動 → 用「剛改的下拉」相對定位該列(不靠 getElementById,避免多列找錯)
+window.bossInlineDobROC = function(idBase, el){
   var empId = idBase.replace('bidob-','');
-  var v = dobROCval(idBase);
-  if (!v) return;
-  // 整格閃綠回饋(不管改年/月/日都一致),閃完還原原底色
-  var yEl = document.getElementById(idBase+'-y');
-  var cell = yEl && yEl.parentElement ? yEl.parentElement : null;
-  if (cell){
-    var orig = cell.style.background || '';
-    cell.style.transition = 'background .2s';
-    cell.style.background = '#D1FAE5';
-    setTimeout(function(){ cell.style.background = orig; }, 800);
-  }
-  bossInlineDob(empId, {value:v, style:{}});  // 存檔交給原函式;傳替身避免它再動到元素
+  var cell = el ? el.parentElement : null;            // 該下拉所在的 <td>
+  var sels = cell ? cell.querySelectorAll('select') : [];
+  if (sels.length < 3) return;
+  var y = sels[0].value, m = sels[1].value, d = sels[2].value;
+  if (!y || !m || !d) return;                          // 三格湊齊才存
+  var v = (Number(y)+1911) + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+  // 整格閃綠回饋,閃完還原原底色
+  var orig = cell.style.background || '';
+  cell.style.transition = 'background .2s';
+  cell.style.background = '#D1FAE5';
+  setTimeout(function(){ cell.style.background = orig; }, 800);
+  bossInlineDob(empId, {value:v, style:{}});           // 存檔交給原函式
 };
 
 window.bossInlineDob = async function(empId, el){
