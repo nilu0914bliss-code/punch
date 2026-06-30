@@ -7914,6 +7914,9 @@ async function bossRenderTrend(){
   }
   
   const allRev = await fbGet('revenue') || {};
+  const allCal = await fbGet('calendar') || {};
+  // 當月颱風時數 → 換算天數(每日8h),從日均分母扣掉(少做半天就扣0.5天,與老闆算法一致)
+  const typhoonDaysOf = ym => { const c = allCal[ym]; return ((c && c.typhoonHours) || 0) / 8; };
   
   // 抓資料
   let series = []; // [{name, color, monthlyAvg:[12]}]
@@ -7934,7 +7937,8 @@ async function bossRenderTrend(){
             days++;
           }
         });
-        return days > 0 ? Math.round(total / days) : null;
+        const effDays = days - typhoonDaysOf(m.yyyymm);
+        return effDays > 0 ? Math.round(total / effDays) : null;
       });
       series.push({name: s.name, color: COLORS[idx % COLORS.length], monthlyAvg});
     });
@@ -7960,7 +7964,8 @@ async function bossRenderTrend(){
             days++;
           }
         });
-        return days > 0 ? Math.round(total / days) : null;
+        const effDays = days - typhoonDaysOf(m.yyyymm);
+        return effDays > 0 ? Math.round(total / effDays) : null;
       });
       series.push({name: t.name, color: t.color, monthlyAvg});
     });
