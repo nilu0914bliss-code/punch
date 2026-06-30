@@ -1379,6 +1379,7 @@ window.login = async function() {
     storeId: found.storeId || '',
     storeName: store ? store.name : (found.storeId ? '未知門市' : ''),
     role: found.role || 'employee',
+    position: found.position || '',
     managerAccess: found.managerAccess === true
   };
   saveSession(user);
@@ -3602,7 +3603,13 @@ function upwardPairAllowed(reviewer, target){
   return LEAD.indexOf(target.position) >= 0 && target.storeId === reviewer.storeId && UPWARD_RANK[target.position] >= rRank;
 }
 function upwardComputeTargets(){
-  var list = EMPLOYEES.filter(function(e){ return upwardPairAllowed(currentUser, e); });
+  var me = currentUser;
+  // 舊登入狀態可能沒帶 position,即時從員工名單補上(免強制重登)
+  if (me && (me.position === undefined || me.position === '')) {
+    var meEmp = EMPLOYEES.find(function(e){ return e.id === me.id; });
+    if (meEmp) me = { id: me.id, name: me.name, storeId: me.storeId, position: meEmp.position };
+  }
+  var list = EMPLOYEES.filter(function(e){ return upwardPairAllowed(me, e); });
   list.sort(function(a,b){ return (a.position==='督導'?0:1) - (b.position==='督導'?0:1); });
   return list;
 }
