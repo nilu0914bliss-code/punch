@@ -7555,14 +7555,12 @@ async function bossLoadUpward(){
     if (_cu) Object.keys(_cu).forEach(function(k){ if(/^\d{4}-\d{2}$/.test(k)) _cset[k]=1; });
     _clrMonths = Object.keys(_cset).sort().reverse();
   } catch(e){ _clrMonths = []; }
-  // 🧹 依新規則清理下對上舊紀錄面板(先掃描列出、確認才刪)
-  var _uwCleanPanel = '<details style="border:1px solid #FCD34D;background:#FFFBEB;border-radius:11px;padding:12px 15px;margin-bottom:14px"><summary style="cursor:pointer;font-size:13px;font-weight:800;color:#92400e;list-style:none">🧹 依新評分規則清理下對上舊紀錄</summary><div style="margin-top:11px"><div style="font-size:12px;color:#78350f;line-height:1.7;margin-bottom:10px">掃描所有已填的下對上紀錄,找出「依現在的新規則<b>不該由他評</b>」的舊紀錄(例:店長之前評過自己店的組長)。<br>會先<b>列出清單給你看</b>,你按確認才刪。只刪不符規則的那幾筆,其他不動。</div><button onclick="bossScanUpwardViolations()" style="padding:9px 16px;background:#d97706;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer">🔍 掃描不符紀錄</button><div id="uw-clean-result" style="margin-top:12px"></div></div></details>';
   var _clearPanel = '';
   if (_clrMonths.length){
     var _copts = _clrMonths.map(function(m){ return '<option value="' + m + '">' + m + '</option>'; }).join('');
     _clearPanel = '<details style="border:1px solid #FCA5A5;background:#FEF2F2;border-radius:11px;padding:12px 15px;margin-bottom:14px"><summary style="cursor:pointer;font-size:13px;font-weight:800;color:#b91c1c;list-style:none">🗑️ 清除某月 KPI（測試清理用）</summary><div style="margin-top:11px"><div style="font-size:12px;color:#7f1d1d;line-height:1.7;margin-bottom:10px">清除後該月「上對下 + 下對上」全部 KPI 會被刪除,<b>無法復原</b>。<br>薪資、打卡、員工資料<b>不受影響</b>。</div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><select id="kpi-clear-month" style="padding:8px 11px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;font-weight:700">' + _copts + '</select><button onclick="bossClearMonthKpi()" style="padding:9px 16px;background:#dc2626;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer">🗑️ 清除這個月的 KPI</button></div></div></details>';
   }
-  var html='<details style="background:#fff;border:1px solid #F3E6E1;border-radius:11px;padding:12px 15px;margin-bottom:14px"><summary style="cursor:pointer;font-size:13px;font-weight:800;color:#7D3D2C;list-style:none">⏰ KPI 填寫時間設定（點開可調整）</summary><div style="margin-top:12px"><div style="background:#FDF0ED;border-radius:9px;padding:11px 13px;margin-bottom:10px"><div style="font-size:12px;font-weight:800;color:#7D3D2C;margin-bottom:7px">上對下（主管評員工）</div><label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;margin-bottom:7px"><input type="checkbox" id="kpi-down-anytime"' + (DOWN_ANYTIME ? ' checked' : '') + ' style="width:16px;height:16px"> 不限時間,隨時可填</label><div style="display:flex;align-items:center;gap:6px;font-size:13.5px;margin-bottom:7px">開始:每月 <input type="number" id="kpi-down-day" value="' + DOWN_OPEN_DAY + '" min="1" max="28" style="width:56px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</div><div style="display:flex;align-items:center;gap:8px;font-size:13.5px;flex-wrap:wrap">結束:<label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-down-end" value="monthend"' + (DOWN_END_DAY>0?'':' checked') + '> 當月月底</label><label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-down-end" value="next"' + (DOWN_END_DAY>0?' checked':'') + '> 次月 <input type="number" id="kpi-down-endday" value="' + (DOWN_END_DAY>0?DOWN_END_DAY:3) + '" min="1" max="28" style="width:50px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</label></div></div><div style="background:#FDF0ED;border-radius:9px;padding:11px 13px;margin-bottom:10px"><div style="font-size:12px;font-weight:800;color:#7D3D2C;margin-bottom:7px">下對上（員工評主管）</div><label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;margin-bottom:7px"><input type="checkbox" id="kpi-up-anytime"' + (UPWARD_ANYTIME ? ' checked' : '') + ' style="width:16px;height:16px"> 不限時間,隨時可填</label><div style="display:flex;align-items:center;gap:6px;font-size:13.5px;margin-bottom:7px">開始:每月 <input type="number" id="kpi-up-day" value="' + UPWARD_OPEN_DAY + '" min="1" max="28" style="width:56px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</div><div style="display:flex;align-items:center;gap:8px;font-size:13.5px;flex-wrap:wrap">結束:<label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-up-end" value="monthend"' + (UPWARD_END_DAY>0?'':' checked') + '> 當月月底</label><label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-up-end" value="next"' + (UPWARD_END_DAY>0?' checked':'') + '> 次月 <input type="number" id="kpi-up-endday" value="' + (UPWARD_END_DAY>0?UPWARD_END_DAY:3) + '" min="1" max="28" style="width:50px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</label></div></div><div style="font-size:11px;color:#9CA3AF;margin-top:2px;line-height:1.6">· 勾「不限時間」= 隨時可填<br>· 結束選「次月 X 號」就是跨月(例:25 號 ~ 次月 3 號)<br>· 過了結束日仍可補填、不會鎖住</div><button onclick="bossSaveKpiTiming()" style="margin-top:11px;padding:9px 18px;background:var(--s);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer">儲存時間設定</button><span id="kpi-timing-msg" style="margin-left:10px;font-size:12px"></span></div></details>' + _clearPanel + _uwCleanPanel + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
+  var html='<details style="background:#fff;border:1px solid #F3E6E1;border-radius:11px;padding:12px 15px;margin-bottom:14px"><summary style="cursor:pointer;font-size:13px;font-weight:800;color:#7D3D2C;list-style:none">⏰ KPI 填寫時間設定（點開可調整）</summary><div style="margin-top:12px"><div style="background:#FDF0ED;border-radius:9px;padding:11px 13px;margin-bottom:10px"><div style="font-size:12px;font-weight:800;color:#7D3D2C;margin-bottom:7px">上對下（主管評員工）</div><label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;margin-bottom:7px"><input type="checkbox" id="kpi-down-anytime"' + (DOWN_ANYTIME ? ' checked' : '') + ' style="width:16px;height:16px"> 不限時間,隨時可填</label><div style="display:flex;align-items:center;gap:6px;font-size:13.5px;margin-bottom:7px">開始:每月 <input type="number" id="kpi-down-day" value="' + DOWN_OPEN_DAY + '" min="1" max="28" style="width:56px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</div><div style="display:flex;align-items:center;gap:8px;font-size:13.5px;flex-wrap:wrap">結束:<label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-down-end" value="monthend"' + (DOWN_END_DAY>0?'':' checked') + '> 當月月底</label><label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-down-end" value="next"' + (DOWN_END_DAY>0?' checked':'') + '> 次月 <input type="number" id="kpi-down-endday" value="' + (DOWN_END_DAY>0?DOWN_END_DAY:3) + '" min="1" max="28" style="width:50px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</label></div></div><div style="background:#FDF0ED;border-radius:9px;padding:11px 13px;margin-bottom:10px"><div style="font-size:12px;font-weight:800;color:#7D3D2C;margin-bottom:7px">下對上（員工評主管）</div><label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;margin-bottom:7px"><input type="checkbox" id="kpi-up-anytime"' + (UPWARD_ANYTIME ? ' checked' : '') + ' style="width:16px;height:16px"> 不限時間,隨時可填</label><div style="display:flex;align-items:center;gap:6px;font-size:13.5px;margin-bottom:7px">開始:每月 <input type="number" id="kpi-up-day" value="' + UPWARD_OPEN_DAY + '" min="1" max="28" style="width:56px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</div><div style="display:flex;align-items:center;gap:8px;font-size:13.5px;flex-wrap:wrap">結束:<label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-up-end" value="monthend"' + (UPWARD_END_DAY>0?'':' checked') + '> 當月月底</label><label style="display:flex;align-items:center;gap:4px"><input type="radio" name="kpi-up-end" value="next"' + (UPWARD_END_DAY>0?' checked':'') + '> 次月 <input type="number" id="kpi-up-endday" value="' + (UPWARD_END_DAY>0?UPWARD_END_DAY:3) + '" min="1" max="28" style="width:50px;padding:6px 8px;border:1px solid #E5E7EB;border-radius:7px;font-size:14px;text-align:center"> 號</label></div></div><div style="font-size:11px;color:#9CA3AF;margin-top:2px;line-height:1.6">· 勾「不限時間」= 隨時可填<br>· 結束選「次月 X 號」就是跨月(例:25 號 ~ 次月 3 號)<br>· 過了結束日仍可補填、不會鎖住</div><button onclick="bossSaveKpiTiming()" style="margin-top:11px;padding:9px 18px;background:var(--s);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer">儲存時間設定</button><span id="kpi-timing-msg" style="margin-left:10px;font-size:12px"></span></div></details>' + _clearPanel + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
   html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">評核期間</div><div style="font-size:16px;font-weight:900;margin-top:2px">'+bossState.year+' 年 '+bossState.month+' 月</div></div>';
   html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">填寫期間</div><div style="font-size:16px;font-weight:900;margin-top:2px;color:#b45309">'+kpiWinText(UPWARD_ANYTIME, UPWARD_OPEN_DAY, UPWARD_END_DAY)+'</div></div>';
   html+='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:11px;padding:11px 15px"><div style="font-size:11px;color:#9CA3AF;font-weight:700">已收件</div><div style="font-size:16px;font-weight:900;margin-top:2px;color:#BE6148">'+subCount+' / '+scopeRaters.length+' 人</div></div>';
@@ -7719,60 +7717,6 @@ window.bossViewUpwardDetail = async function(targetId, ymOverride){
     + '<button onclick="'+closeJs+'" style="width:100%;margin-top:14px;padding:12px;background:#F3F4F6;color:#374151;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">關閉</button>'
     + '</div>';
   ov.style.display='flex';
-};
-var _uwViolations = [];
-window.bossScanUpwardViolations = async function(){
-  var box = document.getElementById('uw-clean-result');
-  if (box) box.innerHTML = '<div style="font-size:12px;color:#92400e">掃描中…</div>';
-  _uwViolations = [];
-  var all = null;
-  try {
-    all = await fetch('https://punch-83688-default-rtdb.asia-southeast1.firebasedatabase.app/upwardReviews.json').then(function(r){ return r.json(); }).catch(function(){ return null; });
-  } catch(e){ all = null; }
-  if (!all){ if(box) box.innerHTML = '<div style="font-size:12px;color:#92400e">目前沒有任何下對上紀錄,或讀取失敗。</div>'; return; }
-  var empById = {};
-  EMPLOYEES.forEach(function(e){ empById[e.id] = e; });
-  // 結構:upwardReviews/{ym}/{targetId}/{reviewerId} = rec
-  Object.keys(all).forEach(function(ym){
-    var byTarget = all[ym] || {};
-    Object.keys(byTarget).forEach(function(targetId){
-      var byReviewer = byTarget[targetId] || {};
-      Object.keys(byReviewer).forEach(function(reviewerId){
-        var reviewer = empById[reviewerId], target = empById[targetId];
-        // 找不到人的(已刪除)先不動,只報數
-        if (!reviewer || !target){ _uwViolations.push({ ym:ym, targetId:targetId, reviewerId:reviewerId, unknown:true, rName:(reviewer?reviewer.name:'(已刪除)'), tName:(target?target.name:'(已刪除)') }); return; }
-        if (!upwardPairAllowed(reviewer, target)){
-          _uwViolations.push({ ym:ym, targetId:targetId, reviewerId:reviewerId, unknown:false,
-            rName:reviewer.name, rPos:reviewer.position, tName:target.name, tPos:target.position });
-        }
-      });
-    });
-  });
-  var bad = _uwViolations.filter(function(v){ return !v.unknown; });
-  var unk = _uwViolations.filter(function(v){ return v.unknown; });
-  if (!bad.length && !unk.length){ if(box) box.innerHTML = '<div style="font-size:12.5px;color:#166534;font-weight:700">✅ 掃描完成,沒有不符新規則的紀錄,不用清。</div>'; return; }
-  var rows = bad.map(function(v){
-    return '<div style="font-size:12px;color:#7f1d1d;padding:5px 0;border-bottom:1px solid #FDE68A">' + v.ym + '月 · <b>' + v.rName + '</b>(' + v.rPos + ')評了 <b>' + v.tName + '</b>(' + v.tPos + ')</div>';
-  }).join('');
-  var unkNote = unk.length ? '<div style="font-size:11px;color:#9CA3AF;margin-top:8px">另有 ' + unk.length + ' 筆牽涉已刪除員工,不自動處理(保留)。</div>' : '';
-  var btn = bad.length ? '<button onclick="bossCleanUpwardConfirm()" style="margin-top:11px;padding:9px 16px;background:#dc2626;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer">🗑️ 確認清除這 ' + bad.length + ' 筆</button>' : '';
-  if (box) box.innerHTML = '<div style="font-size:12.5px;font-weight:800;color:#92400e;margin-bottom:6px">找到 ' + bad.length + ' 筆不符新規則:</div><div style="max-height:200px;overflow:auto;background:#fff;border:1px solid #FDE68A;border-radius:8px;padding:8px 11px">' + rows + '</div>' + unkNote + btn;
-};
-window.bossCleanUpwardConfirm = async function(){
-  var bad = (_uwViolations||[]).filter(function(v){ return !v.unknown; });
-  if (!bad.length){ return; }
-  if (!confirm('確定要清除這 ' + bad.length + ' 筆不符新規則的下對上紀錄嗎?\n\n刪掉後無法復原。其他紀錄、薪資、打卡都不受影響。')) return;
-  var box = document.getElementById('uw-clean-result');
-  if (box) box.innerHTML = '<div style="font-size:12px;color:#92400e">清除中…</div>';
-  var ok = 0, fail = 0;
-  for (var i=0;i<bad.length;i++){
-    var v = bad[i];
-    try { await fbRemove('upwardReviews/' + v.ym + '/' + v.targetId + '/' + v.reviewerId); ok++; }
-    catch(e){ fail++; }
-  }
-  _uwViolations = [];
-  if (box) box.innerHTML = '<div style="font-size:12.5px;color:#166534;font-weight:700">✅ 已清除 ' + ok + ' 筆' + (fail? ' ('+fail+' 筆失敗,請重掃)':'') + '。</div>';
-  if(window.toast) toast('已清除 ' + ok + ' 筆不符紀錄','s');
 };
 window.bossClearMonthKpi = async function(){
   var sel = document.getElementById('kpi-clear-month');
@@ -8091,6 +8035,8 @@ async function bossRenderTrend(){
       } else {
         svg += '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="' + s.color + '"/>';
       }
+      // 每點數字標籤(白色描邊讓交叉處仍清楚)
+      svg += '<text x="' + p.x + '" y="' + (p.y - 7) + '" text-anchor="middle" font-size="8" font-weight="700" fill="' + s.color + '" stroke="#fff" stroke-width="2.5" paint-order="stroke" style="paint-order:stroke fill">' + Math.round(p.v).toLocaleString() + '</text>';
     });
   });
   
