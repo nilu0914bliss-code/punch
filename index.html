@@ -3464,14 +3464,14 @@ async function mgrRenderDiscBox(empId, yyyymm, savedDisc){
   box.innerHTML = h;
   mgrSetDisc(disc);
 }
-function mgrSetDisc(v){
+window.mgrSetDisc = function(v){
   var hidden = document.getElementById('mgr-kpi-discipline');
   if (hidden) hidden.value = v;
   var ok = document.getElementById('mgr-disc-ok'), no = document.getElementById('mgr-disc-no');
   if (ok){ ok.style.background = v===10?'#10b981':'#fff'; ok.style.borderColor = v===10?'#10b981':'#E5E7EB'; ok.style.color = v===10?'#fff':'#6B7280'; }
   if (no){ no.style.background = v===0?'#dc2626':'#fff'; no.style.borderColor = v===0?'#dc2626':'#E5E7EB'; no.style.color = v===0?'#fff':'#6B7280'; }
 }
-function mgrToggleEarlyLeave(){
+window.mgrToggleEarlyLeave = function(){
   var el = document.getElementById('mgr-disc-leave'); if(!el) return;
   var on = el.getAttribute('data-on') !== '1';
   el.setAttribute('data-on', on?'1':'0');
