@@ -8152,6 +8152,9 @@ async function bossLoadPayroll(){
     const _first = STORES.find(function(s){ return s.active !== false; });
     if (_first){ bossState.storeId = _first.id; const _sel=document.getElementById('boss-store-select'); if(_sel) _sel.value=_first.id; }
   }
+  // ⭐ 保險:直接隱藏「全部門市」選項(不管怎麼進來/重整/重算都不會出現)
+  const _allOpt2 = document.querySelector('#boss-store-select option[value="all"]');
+  if (_allOpt2) _allOpt2.style.display = 'none';
   const _S = bossState.storeId;
   const emps = EMPLOYEES.filter(function(e){ return e.active!==false && e.role!=='superadmin' && e.role!=='manager'; });  // 主管/總管理員不列入薪資表
   const cont = document.getElementById('boss-payroll-content');
