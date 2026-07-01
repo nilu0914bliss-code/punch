@@ -6766,7 +6766,7 @@ function calculateSalary(emp, monthData){
   const totalSalary = totalPayable + performanceBonus;
   
   // === 11. 勞健保自付 ===
-  const hg = (emp.healthGrade !== undefined && emp.healthGrade !== '' && emp.healthGrade !== null) ? Number(emp.healthGrade) : posInsuranceGrade(emp.position);  // 手填優先,否則依職階自動帶
+  const hg = (Number(emp.healthGrade) > 0) ? Number(emp.healthGrade) : posInsuranceGrade(emp.position);  // 手填優先(0/空白視同未填);否則依職階自動帶
   const laborInsurance = Math.round(hg * 0.125 * 0.2);
   const healthInsurance = Math.round(hg * 0.0517 * 0.3);
   
@@ -8094,8 +8094,62 @@ async function bossLoadNotice(){
   cont.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span style="font-size:24px">📅</span><div><div style="font-weight:800">年度行事曆</div><div style="font-size:11px;color:#6B7280">上傳於 ' + (notice.uploadedAt ? rocTL(notice.uploadedAt) : '?') + '</div></div></div><img src="' + notice.imageBase64 + '" style="max-width:100%;border-radius:9px">';
 }
 
+// ⭐ 當月所屬門市:優先用已凍結(結算/手動存過的)→ 否則員工目前 storeId
+function payrollHomeStore(emp, saved){
+  return (saved && saved.homeStore) ? saved.homeStore : emp.storeId;
+}
+
+// ⭐ 把「完整月薪 calc」分攤到某一店 storeS(不改計算引擎,只重算顯示)
+// 隨工時(底薪、加班費)按各店時數比例拆;定額整筆歸所屬店;所屬店吸收進位餘數,保證各店加總=全額
+function distributeCalcToStore(md, calc, storeS, homeStore){
+  const leaveEquiv = (md.fullLeaveH||0) + (md.halfLeaveH||0)*0.5;  // 假時數無門市 → 歸所屬店
+  const sh = md.storeHours || {};
+  const totalEff = (md.workHours||0) + leaveEquiv;
+  const isHome = (storeS === homeStore);
+  const effAt = function(sid){ return (sh[sid]||0) + (sid===homeStore ? leaveEquiv : 0); };
+  const ratioAt = function(sid){ return totalEff>0 ? effAt(sid)/totalEff : (sid===homeStore?1:0); };
+  // 隨工時項:非所屬店=四捨五入;所屬店=全額−其他店已分配(保證加總精準無餘差)
+  function splitHourly(full){
+    full = full || 0;
+    if (isHome){
+      let other = 0;
+      Object.keys(sh).forEach(function(sid){ if(sid!==homeStore && sh[sid]>0) other += Math.round(full*ratioAt(sid)); });
+      return full - other;
+    }
+    return Math.round(full * ratioAt(storeS));
+  }
+  const F = function(v){ return isHome ? (v||0) : 0; };  // 定額:只在所屬店整筆
+  const baseSalary  = splitHourly(calc.baseSalary);
+  const overtimePay = splitHourly(calc.overtimePay);
+  const disciplineBonus  = F(calc.disciplineBonus);
+  const attendanceBonus  = F(calc.attendanceBonus);
+  const birthdayGift     = F(calc.birthdayGift);
+  const annualLeaveCash  = F(calc.annualLeaveCash);
+  const managerBonus     = F(calc.managerBonus);
+  const deliveryBonus    = F(calc.deliveryBonus);
+  const salesBonus       = F(calc.salesBonus);
+  const performanceBonus = F(calc.performanceBonus);
+  const laborInsurance   = F(calc.laborInsurance);
+  const healthInsurance  = F(calc.healthInsurance);
+  const totalPayable = baseSalary+disciplineBonus+attendanceBonus+overtimePay+birthdayGift+annualLeaveCash+managerBonus+deliveryBonus+salesBonus;
+  const totalSalary  = totalPayable + performanceBonus;
+  const actualPay    = totalSalary - laborInsurance - healthInsurance;
+  return Object.assign({}, calc, {
+    baseSalary, overtimePay, disciplineBonus, attendanceBonus, birthdayGift, annualLeaveCash,
+    managerBonus, deliveryBonus, salesBonus, performanceBonus, laborInsurance, healthInsurance,
+    totalPayable, totalSalary, actualPay,
+    _isHome: isHome, _hoursAtStore: (sh[storeS]||0), _homeStore: homeStore
+  });
+}
+
 async function bossLoadPayroll(){
-  const emps = bossFilterEmps().filter(e => e.role !== 'manager');  // 主管帳號不列入薪資表
+  // ⭐ 薪資核對不吃「全部門市」:老闆一店一帳戶各匯各的 → 進來若是 all 自動切第一家
+  if (bossState.storeId === 'all'){
+    const _first = STORES.find(function(s){ return s.active !== false; });
+    if (_first){ bossState.storeId = _first.id; const _sel=document.getElementById('boss-store-select'); if(_sel) _sel.value=_first.id; }
+  }
+  const _S = bossState.storeId;
+  const emps = EMPLOYEES.filter(function(e){ return e.active!==false && e.role!=='superadmin' && e.role!=='manager'; });  // 主管/總管理員不列入薪資表
   const cont = document.getElementById('boss-payroll-content');
   cont.innerHTML = '<div style="text-align:center;color:#9CA3AF;padding:30px">計算中…</div>';
   await loadInsuranceGrades();  // 薪資計算用最新級距設定
@@ -8140,10 +8194,17 @@ async function bossLoadPayroll(){
     if (saved.performanceBonus !== undefined) monthData.performanceBonus = saved.performanceBonus;
     if (saved.annualLeaveCash !== undefined) monthData.annualLeaveCash = saved.annualLeaveCash;
     
-    const calc = calculateSalary(emp, monthData);
+    const calcFull = calculateSalary(emp, monthData);
+    // ⭐ 是否列入本店:當月在本店有打卡時數,或本店是其當月所屬門市(整月請假/新人)
+    const homeStore = payrollHomeStore(emp, saved);
+    const hoursAtStore = (monthData.storeHours && monthData.storeHours[_S]) || 0;
+    if (hoursAtStore <= 0 && homeStore !== _S) continue;
+    // ⭐ 把完整月薪分攤到本店(隨工時比例拆、定額歸所屬店)
+    const calc = distributeCalcToStore(monthData, calcFull, _S, homeStore);
     const kpiScore = (kpi && kpi.weightedScore !== undefined) ? kpi.weightedScore : null;
     const upwardScore = upwardAggScore(upwardData, emp.id);
-    rows.push({emp, monthData, calc, saved, kpiScore, upwardScore});
+    const crossStore = Object.keys(monthData.storeHours||{}).filter(function(k){ return monthData.storeHours[k]>0.05; }).length > 1;
+    rows.push({emp, monthData, calc, calcFull, saved, kpiScore, upwardScore, homeStore, crossStore});
   }
   
   // 結算狀態
@@ -8160,10 +8221,10 @@ window.bossExportPayrollCSV = function(){
   if (!rows.length){ toast('目前沒有薪資資料可下載,請先進入薪資核對','e'); return; }
   const ym = roc(bossState.year) + '年' + bossState.month + '月';
   const header = ['姓名','員工編號','門市','職階','打卡時數','底薪','紀律獎金','出勤獎金','加班時數','加班費','生日禮金','特休折現','外送津貼','職務津貼','業績獎金','績效獎金','應領小計','勞保自付','健保自付','實領'];
+  const _curStore = STORES.find(function(s2){return s2.id===bossState.storeId;});
   const data = rows.map(function(r){
     const e=r.emp||{}, m=r.monthData||{}, c=r.calc||{};
-    const store = STORES.find(function(s2){return s2.id===e.storeId;});
-    return [e.name||'', e.code||'', store?store.name:'', e.position||'', (m.workHours||0),
+    return [e.name||'', e.code||'', _curStore?_curStore.name:'', e.position||'', (c._hoursAtStore!=null?c._hoursAtStore:(m.workHours||0)),
       c.baseSalary||0, c.disciplineBonus||0, c.attendanceBonus||0, c.overtimeHours||0, c.overtimePay||0,
       c.birthdayGift||0, c.annualLeaveCash||0, c.deliveryBonus||0, c.managerBonus||0, c.salesBonus||0,
       c.performanceBonus||0, c.totalPayable||0, c.laborInsurance||0, c.healthInsurance||0, c.actualPay||0];
@@ -8189,6 +8250,9 @@ function renderPayrollTable(rows){
   let html = '';
   const _payTyH = (typeof bossState !== 'undefined' && bossState.payrollTyphoonH) || 0;
   if (_payTyH > 0) html += '<div style="background:#FDF0ED;border-left:3px solid #BE6148;border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:12.5px;font-weight:700;color:#7D3D2C">🌀 本月全店颱風假 ' + _payTyH + ' h</div>';
+  const _storeNm = (STORES.find(function(s){return s.id===bossState.storeId;})||{}).name || bossState.storeId;
+  const _mustPay = rows.reduce(function(a,r){ return a + (r.calc.actualPay||0); }, 0);
+  html += '<div style="background:#7D3D2C;color:#fff;border-radius:10px;padding:12px 15px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:12px;opacity:.85">💰 '+_storeNm+' · 本店應匯(實領合計)</div><div style="font-size:20px;font-weight:800">$'+_mustPay.toLocaleString()+'</div></div>';
   html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button onclick="bossExportPayrollCSV()" style="padding:8px 15px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer">📥 下載薪資總表(報勞保/稽核用)</button></div>';
   html += '<table style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap"><thead>';
   // 雙層表頭 (跟老闆紙本一樣)
@@ -8228,20 +8292,32 @@ function renderPayrollTable(rows){
     const md = r.monthData;
     const emp = r.emp;
     html += '<tr>';
-    html += '<td style="padding:6px 8px;border:1px solid #E5E7EB;font-weight:700;text-align:left;position:sticky;left:0;background:#fff;z-index:1">' + emp.name + '</td>';
+    // 當月所屬:非單純本店的人(轉店/跨店)給下拉可改;定額歸此所屬店
+    const _isClean = (!r.crossStore && r.homeStore === bossState.storeId && r.calc._hoursAtStore > 0);
+    let homeCell = '';
+    if (!_isClean){
+      const _acts = STORES.filter(function(s){return s.active!==false;});
+      let _opts = _acts.map(function(s){ return '<option value="'+s.id+'"'+(s.id===r.homeStore?' selected':'')+'>'+s.name+'</option>'; }).join('');
+      if(!_acts.some(function(s){return s.id===r.homeStore;})){ _opts = '<option value="'+r.homeStore+'" selected>'+((STORES.find(function(s){return s.id===r.homeStore;})||{}).name||r.homeStore)+'</option>'+_opts; }
+      homeCell = '<div style="margin-top:3px;font-size:10px;color:#7D3D2C;font-weight:600">當月所屬 <select onchange="bossSetMonthHome(\''+emp.id+'\',this.value)" style="font-size:10px;padding:2px 4px;border:1px solid #E5D5CF;border-radius:5px;background:#FDF7F5;font-family:inherit">'+_opts+'</select></div>';
+    }
+    const crossTag = r.crossStore ? '<span style="display:inline-block;font-size:9px;font-weight:800;background:#FDF0ED;color:#BE6148;padding:1px 5px;border-radius:10px;margin-left:4px">跨店</span>' : '';
+    const notHomeTag = (!r.calc._isHome) ? '<span style="display:inline-block;font-size:9px;font-weight:700;background:#F3F4F6;color:#6B7280;padding:1px 5px;border-radius:10px;margin-left:4px">此店僅底薪</span>' : '';
+    html += '<td style="padding:6px 8px;border:1px solid #E5E7EB;font-weight:700;text-align:left;position:sticky;left:0;background:#fff;z-index:1">' + emp.name + crossTag + notHomeTag + homeCell + '</td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:center">' + (emp.position || '—') + '</td>';
-    // 打卡時數 (可點開看分店明細)
+    // 打卡時數 (顯示本店時數;tooltip 看各店明細與合計)
     const storeBreakdown = md.storeHours || {};
     const storeKeys = Object.keys(storeBreakdown).filter(k => storeBreakdown[k] > 0);
-    const hasBreakdown = storeKeys.length > 0;
-    if (hasBreakdown){
+    const _hAtStore = (r.calc._hoursAtStore != null ? r.calc._hoursAtStore : (md.workHours||0));
+    const _hTotal = (md.workHours||0);
+    if (storeKeys.length > 1){
       const breakdownHtml = storeKeys.map(sid => {
         const st = STORES.find(s => s.id === sid);
         return (st?st.name:sid) + ': ' + storeBreakdown[sid].toFixed(1) + 'h';
-      }).join('\n');
-      html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right" title="' + breakdownHtml + '"><span onclick="bossTogglePunchDetail(\'' + emp.id + '\',this)" style="cursor:pointer;border-bottom:1px dashed #9CA3AF" data-store-detail=\'' + JSON.stringify(storeBreakdown) + '\'>' + (md.workHours||0).toFixed(1) + ' ▼</span><div class="punch-detail" style="display:none;font-size:10px;color:#6B7280;margin-top:3px;text-align:left;line-height:1.5;border-top:1px dashed #E5E7EB;padding-top:3px"></div></td>';
+      }).join('\n') + '\n合計: ' + _hTotal.toFixed(1) + 'h';
+      html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right" title="' + breakdownHtml + '"><span onclick="bossTogglePunchDetail(\'' + emp.id + '\',this)" style="cursor:pointer;border-bottom:1px dashed #9CA3AF" data-store-detail=\'' + JSON.stringify(storeBreakdown) + '\'>' + _hAtStore.toFixed(1) + ' ▼</span><div style="font-size:9px;color:#BE6148;margin-top:1px">本店 / 全 ' + _hTotal.toFixed(1) + 'h</div><div class="punch-detail" style="display:none;font-size:10px;color:#6B7280;margin-top:3px;text-align:left;line-height:1.5;border-top:1px dashed #E5E7EB;padding-top:3px"></div></td>';
     } else {
-      html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right">' + (md.workHours||0).toFixed(1) + '</td>';
+      html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right">' + _hAtStore.toFixed(1) + '</td>';
     }
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;background:#F0F9FF">' + (md.annualH || 0) + '</td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;background:#F0F9FF">' + (md.officialH || 0) + '</td>';
@@ -8314,10 +8390,28 @@ function updateSettleUI(){
   }
 }
 
+// ⭐ 設定某人當月所屬門市(轉店/跨店定額歸屬用);存進該月薪資紀錄並重算
+window.bossSetMonthHome = async function(empId, storeId){
+  const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
+  try{
+    await fbUpdate('salaries/' + yyyymm + '/' + empId, {homeStore: storeId});
+    toast('已設定當月所屬門市,重算中…','s');
+    bossLoadPayroll();
+  }catch(e){ toast('設定失敗','e'); }
+};
+
 window.bossToggleSettle = async function(){
   const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
   if (!bossState.settled){
     if (!confirm('確認結算 ' + roc(bossState.year) + '年' + bossState.month + '月 薪資?\n結算後員工會在每月 10 號開放查看薪資條。')) return;
+    // ⭐ 凍結當月所屬門市:未曾指定過的人,以目前 storeId 存檔;以後轉店不影響此月
+    try{
+      const _existing = await fbGet('salaries/' + yyyymm) || {};
+      const _freeze = {};
+      EMPLOYEES.filter(function(e){ return e.active!==false && e.role!=='superadmin' && e.role!=='manager' && e.position!=='督導'; })
+        .forEach(function(e){ const _sv=_existing[e.id]||{}; if(!_sv.homeStore){ _freeze['salaries/'+yyyymm+'/'+e.id+'/homeStore'] = e.storeId; } });
+      if(Object.keys(_freeze).length) await fbUpdate('', _freeze);
+    }catch(e){}
     await fbUpdate('salaries/' + yyyymm, {__settled: true, __settledAt: new Date().toISOString(), __settledBy: (currentUser||{}).id});
     bossState.settled = true;
     toast('✓ 已確認結算', 's');
