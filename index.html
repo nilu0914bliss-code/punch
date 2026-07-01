@@ -7026,6 +7026,10 @@ window.bossSwitchSection = function(section){
     }
   });
   
+  // ⭐ 薪資核對隱藏「全部門市」(老闆一店一帳戶各匯各的);離開此頁自動還原
+  const _allOpt = document.querySelector('#boss-store-select option[value="all"]');
+  if (_allOpt) _allOpt.style.display = (section === 'payroll') ? 'none' : '';
+
   // 載入對應資料
   if (section === 'dash') bossLoadDashboard();
   else if (section === 'payroll') bossLoadPayroll();
@@ -8293,9 +8297,9 @@ function renderPayrollTable(rows){
     const emp = r.emp;
     html += '<tr>';
     // 當月所屬:非單純本店的人(轉店/跨店)給下拉可改;定額歸此所屬店
-    const _isClean = (!r.crossStore && r.homeStore === bossState.storeId && r.calc._hoursAtStore > 0);
+    const _needHome = (r.crossStore || r.homeStore !== bossState.storeId);
     let homeCell = '';
-    if (!_isClean){
+    if (_needHome){
       const _acts = STORES.filter(function(s){return s.active!==false;});
       let _opts = _acts.map(function(s){ return '<option value="'+s.id+'"'+(s.id===r.homeStore?' selected':'')+'>'+s.name+'</option>'; }).join('');
       if(!_acts.some(function(s){return s.id===r.homeStore;})){ _opts = '<option value="'+r.homeStore+'" selected>'+((STORES.find(function(s){return s.id===r.homeStore;})||{}).name||r.homeStore)+'</option>'+_opts; }
