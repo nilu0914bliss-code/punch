@@ -8196,7 +8196,14 @@ async function bossLoadPayroll(){
     if (saved.performanceBonus !== undefined) monthData.performanceBonus = saved.performanceBonus;
     if (saved.annualLeaveCash !== undefined) monthData.annualLeaveCash = saved.annualLeaveCash;
     
-    const calcFull = calculateSalary(emp, monthData);
+    // ⭐ 當月職階:優先用已凍結的 → 否則員工目前職階;連動底薪/主管津貼/勞健保級距
+    const monthPosition = (saved && saved.monthPosition) ? saved.monthPosition : emp.position;
+    const empForCalc = (monthPosition !== emp.position) ? Object.assign({}, emp, {position: monthPosition}) : emp;
+    const calcFull = calculateSalary(empForCalc, monthData);
+    // ⭐ 勞健保自付當月覆蓋(老闆在薪資核對直接改)
+    if (saved.laborInsuranceOverride !== undefined && saved.laborInsuranceOverride !== null && saved.laborInsuranceOverride !== '') calcFull.laborInsurance = Number(saved.laborInsuranceOverride);
+    if (saved.healthInsuranceOverride !== undefined && saved.healthInsuranceOverride !== null && saved.healthInsuranceOverride !== '') calcFull.healthInsurance = Number(saved.healthInsuranceOverride);
+    calcFull.actualPay = (calcFull.totalSalary||0) - (calcFull.laborInsurance||0) - (calcFull.healthInsurance||0);
     // ⭐ 是否列入本店:當月在本店有打卡時數,或本店是其當月所屬門市(整月請假/新人)
     const homeStore = payrollHomeStore(emp, saved);
     const hoursAtStore = (monthData.storeHours && monthData.storeHours[_S]) || 0;
@@ -8206,7 +8213,7 @@ async function bossLoadPayroll(){
     const kpiScore = (kpi && kpi.weightedScore !== undefined) ? kpi.weightedScore : null;
     const upwardScore = upwardAggScore(upwardData, emp.id);
     const crossStore = Object.keys(monthData.storeHours||{}).filter(function(k){ return monthData.storeHours[k]>0.05; }).length > 1;
-    rows.push({emp, monthData, calc, calcFull, saved, kpiScore, upwardScore, homeStore, crossStore});
+    rows.push({emp, monthData, calc, calcFull, saved, kpiScore, upwardScore, homeStore, crossStore, monthPosition});
   }
   
   // 結算狀態
@@ -8304,7 +8311,8 @@ function renderPayrollTable(rows){
     const crossTag = r.crossStore ? '<span style="display:inline-block;font-size:9px;font-weight:800;background:#FDF0ED;color:#BE6148;padding:1px 5px;border-radius:10px;margin-left:4px">跨店</span>' : '';
     const notHomeTag = (!r.calc._isHome) ? '<span style="display:inline-block;font-size:9px;font-weight:700;background:#F3F4F6;color:#6B7280;padding:1px 5px;border-radius:10px;margin-left:4px">此店僅底薪</span>' : '';
     html += '<td style="padding:6px 8px;border:1px solid #E5E7EB;font-weight:700;text-align:left;position:sticky;left:0;background:#fff;z-index:1">' + emp.name + crossTag + notHomeTag + homeCell + '</td>';
-    html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:center">' + (emp.position || '—') + '</td>';
+    var _posOpts = ['督導','店長','副店長','組長','領班','正職人員','實習正職','PT196','PT200','PT230','PT235','PT240','PT250','PT300'].map(function(p){ return '<option value="'+p+'"'+(p===r.monthPosition?' selected':'')+'>'+p+'</option>'; }).join('');
+    html += '<td style="padding:4px;border:1px solid #E5E7EB;text-align:center"><select onchange="bossSetMonthPosition(\''+emp.id+'\',this.value)" style="font-size:11px;padding:3px 4px;border:1px solid #E5D5CF;border-radius:5px;background:#FDF7F5;font-family:inherit;max-width:78px">'+_posOpts+'</select>'+((r.monthPosition!==emp.position)?'<div style="font-size:9px;color:#BE6148;margin-top:1px;font-weight:700">當月</div>':'')+'</td>';
     // 打卡時數 (顯示本店時數;tooltip 看各店明細與合計)
     const storeBreakdown = md.storeHours || {};
     const storeKeys = Object.keys(storeBreakdown).filter(k => storeBreakdown[k] > 0);
@@ -8344,8 +8352,13 @@ function renderPayrollTable(rows){
     // 黃格:績效獎金
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right"><span class="bp-yellow" data-emp="' + emp.id + '" data-field="performanceBonus" data-label="績效獎金" onclick="bossOpenEdit(this,' + (c.performanceBonus||0) + ')" style="background:#FEF9E7;border:1px dashed #F59E0B;border-radius:4px;padding:2px 5px;cursor:pointer;display:inline-block;color:#2563eb;font-weight:700">' + (c.performanceBonus || '—') + '</span></td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;font-weight:800;color:#BE6148">' + c.totalSalary.toLocaleString() + '</td>';
-    html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;color:#c00">−' + c.laborInsurance + '</td>';
-    html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;color:#c00">−' + c.healthInsurance + '</td>';
+    if (c._isHome){
+      html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right"><span class="bp-yellow" data-emp="' + emp.id + '" data-field="laborInsuranceOverride" data-label="勞保自付" onclick="bossOpenEdit(this,' + (c.laborInsurance||0) + ')" style="background:#FEF9E7;border:1px dashed #F59E0B;border-radius:4px;padding:2px 5px;cursor:pointer;color:#c00;display:inline-block">−' + (c.laborInsurance||0) + '</span></td>';
+      html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right"><span class="bp-yellow" data-emp="' + emp.id + '" data-field="healthInsuranceOverride" data-label="健保自付" onclick="bossOpenEdit(this,' + (c.healthInsurance||0) + ')" style="background:#FEF9E7;border:1px dashed #F59E0B;border-radius:4px;padding:2px 5px;cursor:pointer;color:#c00;display:inline-block">−' + (c.healthInsurance||0) + '</span></td>';
+    } else {
+      html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;color:#c00">−' + (c.laborInsurance||0) + '</td>';
+      html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;color:#c00">−' + (c.healthInsurance||0) + '</td>';
+    }
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;font-weight:800;color:#7D3D2C">' + c.actualPay.toLocaleString() + '</td>';
     html += '</tr>';
   });
@@ -8400,6 +8413,16 @@ window.bossSetMonthHome = async function(empId, storeId){
   }catch(e){ toast('設定失敗','e'); }
 };
 
+// ⭐ 設定某人當月職階(連動底薪/主管津貼/勞健保級距);存進該月薪資紀錄並重算
+window.bossSetMonthPosition = async function(empId, position){
+  const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
+  try{
+    await fbUpdate('salaries/' + yyyymm + '/' + empId, {monthPosition: position});
+    toast('已更新當月職階,重算中…','s');
+    bossLoadPayroll();
+  }catch(e){ toast('更新失敗','e'); }
+};
+
 window.bossToggleSettle = async function(){
   const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
   if (!bossState.settled){
@@ -8409,7 +8432,7 @@ window.bossToggleSettle = async function(){
       const _existing = await fbGet('salaries/' + yyyymm) || {};
       const _freeze = {};
       EMPLOYEES.filter(function(e){ return e.active!==false && e.role!=='superadmin' && e.role!=='manager' && e.position!=='督導'; })
-        .forEach(function(e){ const _sv=_existing[e.id]||{}; if(!_sv.homeStore){ _freeze['salaries/'+yyyymm+'/'+e.id+'/homeStore'] = e.storeId; } });
+        .forEach(function(e){ const _sv=_existing[e.id]||{}; if(!_sv.homeStore){ _freeze['salaries/'+yyyymm+'/'+e.id+'/homeStore'] = e.storeId; } if(!_sv.monthPosition){ _freeze['salaries/'+yyyymm+'/'+e.id+'/monthPosition'] = e.position; } });
       if(Object.keys(_freeze).length) await fbUpdate('', _freeze);
     }catch(e){}
     await fbUpdate('salaries/' + yyyymm, {__settled: true, __settledAt: new Date().toISOString(), __settledBy: (currentUser||{}).id});
@@ -8436,6 +8459,9 @@ window.bossOpenEdit = function(el, oldVal){
   document.getElementById('boss-edit-old').value = oldVal;
   document.getElementById('boss-edit-new').value = '';
   document.getElementById('boss-edit-reason').value = '';
+  var _needReason = (field === 'annualLeaveCash' || field === 'salesBonus');
+  var _reqEl = document.getElementById('boss-edit-reason-req');
+  if (_reqEl) _reqEl.textContent = _needReason ? '(必填)' : '(選填)';
   document.getElementById('boss-edit-err').textContent = '';
   document.getElementById('boss-edit-modal').style.display = 'flex';
   setTimeout(() => document.getElementById('boss-edit-new').focus(), 100);
@@ -8451,7 +8477,7 @@ window.bossSaveEdit = async function(){
     err.textContent = '請輸入有效金額';
     return;
   }
-  if (!reason){
+  if (!reason && (bossCurrentEdit.field === 'annualLeaveCash' || bossCurrentEdit.field === 'salesBonus')){
     err.textContent = '請填寫調整原因';
     return;
   }
@@ -9938,7 +9964,7 @@ initApp().then(() => {
     <div style="padding:16px">
       <div style="margin-bottom:11px"><div style="font-size:12px;font-weight:700;margin-bottom:5px">原本金額</div><input id="boss-edit-old" readonly style="width:100%;padding:10px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:13px;background:#F3F4F6;color:#6B7280;box-sizing:border-box"></div>
       <div style="margin-bottom:11px"><div style="font-size:12px;font-weight:700;margin-bottom:5px">新金額</div><input id="boss-edit-new" type="number" placeholder="輸入新金額" style="width:100%;padding:10px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:14px;font-weight:700;color:#BE6148;box-sizing:border-box"></div>
-      <div style="margin-bottom:11px"><div style="font-size:12px;font-weight:700;margin-bottom:5px">調整原因 <span style="color:#c00;font-weight:400">(必填)</span></div><textarea id="boss-edit-reason" rows="3" placeholder="例:本月協助開新店,加 1500" style="width:100%;padding:10px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;resize:vertical"></textarea></div>
+      <div style="margin-bottom:11px"><div style="font-size:12px;font-weight:700;margin-bottom:5px">調整原因 <span id="boss-edit-reason-req" style="color:#c00;font-weight:400">(必填)</span></div><textarea id="boss-edit-reason" rows="3" placeholder="例:本月協助開新店,加 1500" style="width:100%;padding:10px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;resize:vertical"></textarea></div>
       <div id="boss-edit-err" style="color:#c00;font-size:12px;margin-bottom:8px;min-height:16px"></div>
       <button onclick="bossSaveEdit()" style="width:100%;padding:13px;background:#BE6148;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer">儲存變更</button>
     </div>
