@@ -3884,7 +3884,6 @@ async function renderMySalary(){
   const _selfYm = salYear + '-' + String(salMonth).padStart(2,'0');
   const _selfKpi = await fbGet('kpi/' + _selfYm + '/' + emp.id) || {};
   const _selfCal = await fbGet('calendar/' + _selfYm) || {};
-  const _typhoonH = _selfCal.typhoonHours || 0;
   monthData.disciplineScore = _selfKpi.discipline !== undefined ? _selfKpi.discipline : 10;
   monthData.isBirthdayMonth = isBirthdayThisMonth(emp.birthday, salYear, salMonth);
   
@@ -3956,9 +3955,6 @@ async function renderMySalary(){
   // ─ 無薪 ─
   html += sectionLabel('無薪 (0% 薪)', '#c00');
   html += row('📝 事假', (monthData.personalH || monthData.noneLeaveH || 0) + ' h');
-  
-  // ─ 颱風假(全店·記錄用,不計薪;颱風缺勤已反映在打卡時數)─
-  html += '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;border-top:1px dashed #E6D2C8;margin-top:4px;color:#9A6A4F"><span>🌀 颱風假</span><span style="font-weight:700">' + _typhoonH + ' h</span></div>';
   
   html += '</div>';
   
@@ -8174,7 +8170,6 @@ async function bossLoadPayroll(){
     fbGet('kpi/' + yyyymm),
     fbGet('calendar/' + yyyymm)
   ]);
-  bossState.payrollTyphoonH = (calData && calData.typhoonHours) || 0;
   const savedSalariesObj = savedSalaries || {};
   const kpiDataObj = kpiData || {};
   const prefetched = {punches: allPunches, leaves: allLeaves};
@@ -8255,8 +8250,6 @@ function renderPayrollTable(rows){
   }
   
   let html = '';
-  const _payTyH = (typeof bossState !== 'undefined' && bossState.payrollTyphoonH) || 0;
-  if (_payTyH > 0) html += '<div style="background:#FDF0ED;border-left:3px solid #BE6148;border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:12.5px;font-weight:700;color:#7D3D2C">🌀 本月全店颱風假 ' + _payTyH + ' h</div>';
   const _storeNm = (STORES.find(function(s){return s.id===bossState.storeId;})||{}).name || bossState.storeId;
   const _mustPay = rows.reduce(function(a,r){ return a + (r.calc.actualPay||0); }, 0);
   html += '<div style="background:#7D3D2C;color:#fff;border-radius:10px;padding:12px 15px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:12px;opacity:.85">💰 '+_storeNm+' · 本店應匯(實領合計)</div><div style="font-size:20px;font-weight:800">$'+_mustPay.toLocaleString()+'</div></div>';
@@ -9033,7 +9026,6 @@ function bossBatchRender(){
     html += '<div style="border:1.5px solid #ECE3DF;border-radius:11px;padding:11px;background:#FFFDFC">'
       + '<div style="font-size:13px;font-weight:800;color:#7D3D2C;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center">' + roc(mo.y) + '年' + mo.m + '月' + (isCurrent ? '<span style="font-size:9px;font-weight:700;color:#BE6148;background:#FDF0ED;border-radius:20px;padding:1px 7px">本月</span>' : '') + '</div>'
       + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px"><span style="font-size:10px;color:#374151;white-space:nowrap">月基本工時</span><input type="number" min="1" max="300" value="' + mo.workHours + '" onchange="bossBatchSetHours(' + mi + ',this.value)" style="flex:1;padding:5px 7px;font-size:12px;border:1.5px solid #D1D5DB;border-radius:6px;text-align:center;box-sizing:border-box"></div>'
-      + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px"><span style="font-size:10px;color:#9A6A4F;white-space:nowrap">颱風假時數</span><input type="number" min="0" max="300" step="0.5" value="' + (mo.typhoonHours || 0) + '" onchange="bossBatchSetTyphoon(' + mi + ',this.value)" title="純記錄用,目前不影響薪資計算" style="flex:1;padding:5px 7px;font-size:12px;border:1.5px solid #E6D2C8;border-radius:6px;text-align:center;box-sizing:border-box;background:#FDF7F4"></div>'
       + '<table style="width:100%;border-collapse:collapse"><thead><tr>' + head + '</tr></thead><tbody>' + cells + '</tbody></table></div>';
   });
   gridEl.innerHTML = html;
@@ -9916,8 +9908,7 @@ initApp().then(() => {
         <div style="background:#F0F9FF;border-left:3px solid #0c4a6e;padding:9px 12px;border-radius:6px;font-size:11px;color:#374151;line-height:1.7;margin-bottom:10px">
           ℹ️ 這裡設定兩件事(用途不同):<br>
           · <b>月基本工時</b> = 員工每月應出勤時數(算薪資用)<br>
-          · <b>月曆公休</b> = 店哪天公休(算業績登錄漏天數用)<br>
-          · <b>颱風假時數</b> = 僅記錄用,不影響薪資(颱風缺勤已由打卡時數自動反映)
+          · <b>月曆公休</b> = 店哪天公休(算業績登錄漏天數用)
         </div>
         <div style="font-size:11.5px;color:#6B7280;margin-bottom:12px;line-height:1.6">一次設完一整年:每月填月基本工時、點月曆設公休日,最後按一次「儲存一整年」。可先用下方一鍵把同一個工時套用到全部月份。</div>
         <div style="display:flex;align-items:center;gap:8px;background:#FDF0ED;border-radius:9px;padding:10px 12px;margin-bottom:14px;flex-wrap:wrap">
