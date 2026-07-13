@@ -6895,8 +6895,11 @@ function calculateSalary(emp, monthData){
   
   // === 11. 勞健保自付 ===
   const hg = (Number(emp.healthGrade) > 0) ? Number(emp.healthGrade) : posInsuranceGrade(emp.position);  // 手填優先(0/空白視同未填);否則依職階自動帶
-  const laborInsurance = Math.round(hg * 0.125 * 0.2);
-  const healthInsurance = Math.round(hg * 0.0517 * 0.3);
+  // ⭐ 法定最低投保金額:勞保下限 11,100;健保下限 29,500(級距低於下限者,以下限計算)
+  const hgLabor  = Math.max(hg, 11100);
+  const hgHealth = Math.max(hg, 29500);
+  const laborInsurance = Math.round(hgLabor * 0.125 * 0.2);
+  const healthInsurance = Math.round(hgHealth * 0.0517 * 0.3);
   
   // === 12. 實領薪資 ===
   // 驗證 IMG_1880 4月:43000 - 1050 - 651 = 41299 ✓
