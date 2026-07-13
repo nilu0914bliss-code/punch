@@ -7183,7 +7183,12 @@ function bossReloadVisible(){
   else if (id === 'boss-sec-emp') bossLoadEmpList();
   else if (id === 'boss-sec-rev') bossLoadRev();
   else if (id === 'boss-sec-store') bossLoadStore();
-  else if (id === 'boss-sec-kpi') bossLoadKpi();          // ⭐ 修復:切換月份時 KPI 沒重載,會停在舊月份資料
+  else if (id === 'boss-sec-kpi') {
+    bossLoadKpi();
+    // ⭐ 下對上的分數由 bossLoadUpward() 渲染,切月份時要一起重畫(維持在當前分頁)
+    var _upC = document.getElementById('boss-upward-content');
+    if (_upC && _upC.style.display !== 'none') bossLoadUpward();
+  }
   else if (id === 'boss-sec-annual') bossLoadAnnual();    // ⭐ 修復:特休同上
 }
 
