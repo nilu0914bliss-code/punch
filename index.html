@@ -3882,11 +3882,10 @@ async function renderMySalary(){
   // ⭐ 可選月份:只列出「系統真的有薪資資料」的過去月份(避免顯示上線前沒資料的空月份)
   const now = new Date();
   const _curYm = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
-  // 用 REST shallow 只抓 salaries 底下有哪些月份 key(超省流量,不整包下載)
+  // ⭐ 用 SDK 讀取(會自動帶登入身分;上鎖後裸 fetch 會被規則擋掉)
   let _monthKeys = [];
   try {
-    const _r = await fetch('https://punch-83688-default-rtdb.asia-southeast1.firebasedatabase.app/salaries.json?shallow=true');
-    const _o = await _r.json();
+    const _o = await fbGet('salaries');
     if (_o) _monthKeys = Object.keys(_o).filter(k => /^\d{4}-\d{2}$/.test(k) && k < _curYm);
   } catch (e) { _monthKeys = []; }
   _monthKeys.sort().reverse();
@@ -7683,8 +7682,8 @@ async function bossLoadUpward(){
   // 🗑️ 清除某月 KPI 面板(跟時間設定放一起)
   var _clrMonths = [];
   try {
-    var _ck = await fetch('https://punch-83688-default-rtdb.asia-southeast1.firebasedatabase.app/kpi.json?shallow=true').then(function(r){ return r.json(); }).catch(function(){ return null; });
-    var _cu = await fetch('https://punch-83688-default-rtdb.asia-southeast1.firebasedatabase.app/upwardReviews.json?shallow=true').then(function(r){ return r.json(); }).catch(function(){ return null; });
+    var _ck = await fbGet('kpi').catch(function(){ return null; });
+    var _cu = await fbGet('upwardReviews').catch(function(){ return null; });
     var _cset = {};
     if (_ck) Object.keys(_ck).forEach(function(k){ if(/^\d{4}-\d{2}$/.test(k)) _cset[k]=1; });
     if (_cu) Object.keys(_cu).forEach(function(k){ if(/^\d{4}-\d{2}$/.test(k)) _cset[k]=1; });
