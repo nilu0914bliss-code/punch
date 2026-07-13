@@ -1090,6 +1090,7 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getDatabase, ref, set, get, push, onValue, update, remove, query, orderByChild, equalTo, startAt, endAt } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
 // ── 民國年顯示輔助(只影響顯示文字;存進 Firebase 一律仍為西元)──
 function roc(y){ return Number(y) - 1911; }
@@ -1154,6 +1155,37 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const auth = getAuth(app);
+
+// ═══ 個資上鎖 ═══
+// 老闆的 Firebase 信箱(信箱不是機密,可放程式)。密碼「不寫在程式裡」,而是用老闆登入當下輸入的那組。
+// → 請把 Firebase 的密碼設成與系統老闆登入密碼相同,即可一組密碼、一次登入。
+const BOSS_EMAIL = 'nilu0914bliss@gmail.com';
+
+let bossAuthed = false;   // 目前是否具備老闆身分(可讀 /private)
+const authReady = new Promise(function(resolve){
+  let done = false;
+  const finish = function(){ if(!done){ done = true; resolve(); } };
+  onAuthStateChanged(auth, function(user){
+    bossAuthed = !!(user && !user.isAnonymous);
+    if (user) finish();
+    else signInAnonymously(auth).catch(function(e){ console.warn('anon sign-in failed', e); });
+  });
+  setTimeout(finish, 6000);  // 保險:逾時仍放行,避免卡住打卡
+});
+
+// 老闆登入時,用「當下輸入的密碼」換 Firebase 身分(解鎖 /private)
+window.bossUnlock = async function(pw){
+  if (!pw) return false;
+  try { await signInWithEmailAndPassword(auth, BOSS_EMAIL, pw); bossAuthed = true; return true; }
+  catch(e){ console.warn('boss unlock failed', e); return false; }
+};
+// 登出時退回匿名(員工打卡照常)
+window.bossRelock = async function(){
+  try { await signOut(auth); await signInAnonymously(auth); } catch(e){}
+  bossAuthed = false;
+};
+window.isBossAuthed = function(){ return bossAuthed; };
 
 // ── State ──
 let currentUser = null;
@@ -1243,6 +1275,7 @@ function clearSession() {
 
 // ── Init ──
 async function initApp() {
+  await authReady;  // ⭐ 先取得 Firebase 身分(匿名)再讀資料 —— 鎖規則後才讀得到
   // Show loading while data loads
   const loginBtn = document.getElementById('login-btn');
   const loginLoading = document.getElementById('login-loading');
@@ -1265,6 +1298,17 @@ async function initApp() {
   
   if (empsData) {
     EMPLOYEES = Object.entries(empsData).map(([k,v]) => ({...v, id:k}));
+    // ⭐ 個資上鎖:身分證/健保級距/生日存在 /private,僅老闆(Firebase Email 身分)讀得到
+    //    讀不到就維持空白 —— 員工、主管、外人一律看不到,但打卡/登入不受影響
+    try {
+      const priv = await fbGet('private');
+      if (priv) {
+        EMPLOYEES = EMPLOYEES.map(function(e){
+          const p = priv[e.id];
+          return p ? Object.assign({}, e, p) : e;
+        });
+      }
+    } catch(e) { /* 無權限讀取(員工/主管)→ 略過,個資留白 */ }
   }
 
   // Settings
@@ -1309,6 +1353,7 @@ async function initApp() {
       }
       hideLogin();
       applyUser();
+      // ⭐ 重整時 Firebase 會自動保持老闆登入狀態(不需再輸密碼);若失效則個資留白,重新登入即可
       if (currentUser.role === 'manager' || currentUser.role === 'superadmin') {
         buildMgrNav();
         showPage('pg-overview');
@@ -1359,9 +1404,11 @@ window.login = async function() {
   }
 
   // ⭐ superadmin 或「有設密碼」的員工 → 都要驗證密碼
+  let _loginPw = '';
   if (found.role === 'superadmin' || found.passwordHash) {
     const pw = (document.getElementById('login-pw').value || '').trim();
     if (!pw) { errEl.textContent = '請輸入密碼'; return; }
+    _loginPw = pw;
     const hashed = await hashPassword(pw);
     if (!found.passwordHash) {
       errEl.textContent = '帳號尚未設定密碼，請聯絡老闆';
@@ -1383,6 +1430,11 @@ window.login = async function() {
     managerAccess: found.managerAccess === true
   };
   saveSession(user);
+  // ⭐ 老闆登入 → 用剛輸入的密碼取得 Firebase 身分(解鎖個資);員工/主管維持匿名
+  if (user.role === 'superadmin') {
+    const _ok = await window.bossUnlock(_loginPw);
+    if (!_ok) toast('⚠️ 個資解鎖失敗:請確認 Firebase 密碼與系統密碼相同', 'd');
+  }
   hideLogin();
   applyUser();
 
@@ -1407,6 +1459,7 @@ window.login = async function() {
 
 window.logout = function() {
   if (!confirm('確定要登出嗎？')) return;
+  if (typeof window.bossRelock === 'function') window.bossRelock();  // ⭐ 退回匿名,鎖回個資
   clearSession();
   currentUser = null;
   punchState = {IN1:null,OUT1:null,IN2:null,OUT2:null};
@@ -5087,7 +5140,7 @@ function renderEmpList() {
     document.getElementById('cancel-emp-' + e.id).onclick = () => toggleEmpEdit(e.id);
   });
   // ⭐ 渲染後非同步填入現有明文密碼(主管/老闆看得到)
-  fbGet('passwordPlaintext').then(function(pwMap){
+  fbGet('private/passwordPlaintext').then(function(pwMap){
     pwMap = pwMap || {};
     emps.forEach(function(e){
       var inp = document.getElementById('pw-mgr-' + e.id);
@@ -5121,16 +5174,14 @@ async function saveEmpEdit(id) {
   emp.position=position; emp.birthday=birthday;
   
   const updates = {name:emp.name, code:emp.code, storeId, role, position, birthday};
-  // ⭐ 健保級距/投保資料/身分證/出生年月日:只有老闆能改
+  // ⭐ 個資上鎖:身分證/健保級距/出生年月日 → 寫入 /private(僅老闆可讀寫),不進公開的 employees
   if (currentUser && currentUser.role === 'superadmin'){
     const healthGradeStr = (document.getElementById('eh-'+id)||{}).value || '';
     const healthGrade = parseInt(healthGradeStr) || 0;
-    emp.healthGrade = healthGrade;
-    updates.healthGrade = healthGrade;
     const idNumber = ((document.getElementById('eidn-'+id)||{}).value || '').trim().toUpperCase();
     const dob = (document.getElementById('edob-'+id)||{}).value || '';
-    emp.idNumber = idNumber; emp.dob = dob;
-    updates.idNumber = idNumber; updates.dob = dob;
+    emp.healthGrade = healthGrade; emp.idNumber = idNumber; emp.dob = dob;
+    await fbUpdate('private/' + id, {healthGrade: healthGrade, idNumber: idNumber, dob: dob});
   }
   
   await fbUpdate('employees/' + id, updates);
@@ -5198,16 +5249,97 @@ window.confirmAddEmp = async function() {
     const m = dob.match(/^\d{4}-(\d{2})-(\d{2})$/);
     if (m) birthdayMD = m[1] + '-' + m[2];
   }
+  // ⭐ 個資上鎖:公開區不含身分證/健保級距/出生年月日
   const data={
     name:name.trim(),code:code.trim(),storeId,storeName:store?store.name:'',role,active:true,hireDate,
-    position, birthday:birthdayMD, healthGrade, idNumber, dob
+    position, birthday:birthdayMD
   };
   const key=await fbPush('employees',data);
-  EMPLOYEES.push({...data,id:key});
+  // ⭐ 個資寫入 /private(僅老闆可讀寫)
+  if (healthGrade || idNumber || dob) {
+    await fbUpdate('private/' + key, {healthGrade: healthGrade, idNumber: idNumber, dob: dob});
+  }
+  EMPLOYEES.push({...data, id:key, healthGrade, idNumber, dob});
   document.getElementById('add-emp-form').style.display='none';
   renderEmpList();
   toast('✅ '+name+'（'+code+'）已新增','s');
 }
+
+// ⭐ 老闆修改自己的密碼(系統密碼)
+window.bossChangeOwnPassword = async function(){
+  if (!currentUser || currentUser.role !== 'superadmin') { toast('僅老闆可執行','d'); return; }
+  const pw = prompt('請輸入新的總管理員密碼\n\n⚠️ 重要:設定後,請到 Firebase Console → Authentication\n把 ' + BOSS_EMAIL + ' 的密碼也改成「同一組」,\n這樣登入時個資才會自動解鎖。\n\n(6-20 碼英文字母或數字)');
+  if (pw === null) return;
+  const p = (pw || '').trim();
+  if (!/^[A-Za-z0-9]{6,20}$/.test(p)) { alert('❌ 密碼格式錯誤:必須 6-20 碼英文字母或數字'); return; }
+  if (!confirm('確定把總管理員密碼改成新的密碼嗎?\n\n改完後:\n1. 請立刻到 Firebase 把 ' + BOSS_EMAIL + ' 的密碼設成同一組\n2. 下次登入請用新密碼')) return;
+  try {
+    const hashed = await hashPassword(p);
+    await fbUpdate('employees/' + currentUser.id, {passwordHash: hashed});
+    await fbUpdate('private/passwordPlaintext', {[currentUser.id]: p});
+    const me = EMPLOYEES.find(function(e){ return e.id === currentUser.id; });
+    if (me) me.passwordHash = hashed;
+    alert('✅ 系統密碼已更新。\n\n👉 下一步(很重要):\n到 Firebase Console → Authentication → 使用者\n把 ' + BOSS_EMAIL + ' 的密碼「重設」成同一組新密碼。\n\n兩邊一致後,登入就會自動解鎖個資。');
+  } catch(e){ alert('修改失敗:' + (e && e.message ? e.message : e)); }
+};
+
+// ⭐ 個資搬移:employees → private(先複製 → 逐筆驗證 → 全部正確才清除公開區)
+window.bossMigratePrivate = async function(){
+  if (!currentUser || currentUser.role !== 'superadmin') { toast('僅老闆可執行','d'); return; }
+  if (!confirm('將所有員工的「身分證 / 健保級距 / 出生年月日」搬移到保護區。\n\n流程:先複製 → 逐筆驗證 → 確認無誤才清除公開區。\n過程不會刪除任何資料,確定執行?')) return;
+  try {
+    const emps = await fbGet('employees') || {};
+    const ids = Object.keys(emps);
+    // 0) 先把「公開區的明文密碼」整包搬進保護區(這是最大的漏洞)
+    let pwMoved = 0;
+    try {
+      const oldPw = await fbGet('passwordPlaintext');
+      if (oldPw && Object.keys(oldPw).length) {
+        await fbUpdate('private/passwordPlaintext', oldPw);
+        const chk = await fbGet('private/passwordPlaintext') || {};
+        const okAll = Object.keys(oldPw).every(function(k){ return chk[k] === oldPw[k]; });
+        if (okAll) { await fbUpdate('', {'passwordPlaintext': null}); pwMoved = Object.keys(oldPw).length; }
+      }
+    } catch(e) { /* 無舊資料或已搬過 */ }
+    // 1) 複製個資到 private
+    let copied = 0;
+    for (const id of ids) {
+      const e = emps[id] || {};
+      if (e.idNumber || e.healthGrade || e.dob) {
+        await fbUpdate('private/' + id, {
+          idNumber: e.idNumber || '', healthGrade: e.healthGrade || 0, dob: e.dob || ''
+        });
+        copied++;
+      }
+    }
+    // 2) 驗證
+    const priv = await fbGet('private') || {};
+    const bad = [];
+    for (const id of ids) {
+      const e = emps[id] || {}, p = priv[id] || {};
+      if (!e.idNumber && !e.healthGrade && !e.dob) continue;
+      if ((e.idNumber||'') !== (p.idNumber||'') ||
+          (e.healthGrade||0) !== (p.healthGrade||0) ||
+          (e.dob||'') !== (p.dob||'')) bad.push(e.name || id);
+    }
+    if (bad.length) { alert('⚠️ 驗證失敗,以下未正確複製,已中止(公開區資料原封不動):\n' + bad.join('、')); return; }
+    // 3) 驗證通過 → 清除公開區個資
+    if (!confirm('✅ 已複製 ' + copied + ' 筆並驗證通過。\n\n現在要清除「公開區」的身分證/健保級距/出生年月日嗎?\n(資料已安全存在保護區,清除後外人就撈不到了)')) {
+      alert('已複製到保護區,但公開區尚未清除。你可以稍後再執行一次。'); return;
+    }
+    const wipe = {};
+    for (const id of ids) {
+      const e = emps[id] || {};
+      if (e.idNumber !== undefined) wipe['employees/' + id + '/idNumber'] = null;
+      if (e.healthGrade !== undefined) wipe['employees/' + id + '/healthGrade'] = null;
+      if (e.dob !== undefined) wipe['employees/' + id + '/dob'] = null;
+    }
+    if (Object.keys(wipe).length) await fbUpdate('', wipe);
+    alert('🔒 完成!\n\n・個資搬移:' + copied + ' 筆(身分證/健保級距/生日)\n・明文密碼搬移:' + pwMoved + ' 筆\n\n公開區已清除,資料都在保護區了。\n\n下一步:到 Firebase 後台貼上安全規則,就完全鎖住了。');
+  } catch(e) {
+    alert('搬移失敗:' + (e && e.message ? e.message : e) + '\n\n(資料未變動,可重試)');
+  }
+};
 
 // ── Patch ──
 window.openAllAccountsPanel = function() {
@@ -8619,7 +8751,7 @@ window.bossInlinePassword = async function(empId, el){
     el.value = el.defaultValue || '';
     return;
   }
-  const pwPlaintext = await fbGet('passwordPlaintext') || {};
+  const pwPlaintext = await fbGet('private/passwordPlaintext') || {};
   const dup = Object.entries(pwPlaintext).find(([id, p]) => id !== empId && p === pw);
   if (dup){
     const dupEmp = EMPLOYEES.find(e => e.id === dup[0]);
@@ -8629,7 +8761,7 @@ window.bossInlinePassword = async function(empId, el){
   }
   const hashed = await hashPassword(pw);
   await fbUpdate('employees/' + empId, {passwordHash: hashed});
-  await fbUpdate('passwordPlaintext', {[empId]: pw});
+  await fbUpdate('private/passwordPlaintext', {[empId]: pw});
   await fbSet('passwordLogs/' + Date.now() + '_' + empId, {empId, action:'set', by:(currentUser||{}).id, timestamp:new Date().toISOString()});
   emp.passwordHash = hashed;
   el.defaultValue = pw;
@@ -8648,13 +8780,15 @@ async function bossLoadEmpList(){
   }
   
   // 抓密碼明文清單 (老闆專屬)
-  const pwPlaintext = await fbGet('passwordPlaintext') || {};
+  const pwPlaintext = await fbGet('private/passwordPlaintext') || {};
   const POS = ['督導','店長','副店長','組長','領班','正職人員','實習正職','PT196','PT200','PT230','PT235','PT240','PT250','PT300'];
   var _storeOpts = STORES.filter(function(s){return s.active;}).map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
   var _posOptsAdd = POS.map(function(p){return '<option value="'+p+'">'+p+'</option>';}).join('');
   var addEmpHtml = '<div style="margin-bottom:14px">'
     + '<button onclick="var f=document.getElementById(\'boss-add-form\'); f.style.display=(f.style.display===\'none\'?\'block\':\'none\');" style="width:100%;padding:11px;background:#7D3D2C;color:#fff;border:none;border-radius:10px;font-size:13.5px;font-weight:800;cursor:pointer">➕ 新增員工</button>'
     + '<button onclick="bossExportPersonnel()" style="width:100%;margin-top:8px;padding:11px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:13.5px;font-weight:800;cursor:pointer">📥 匯出所有人員資料（姓名／生日／身分證／電話）</button>'
+    + '<button onclick="bossChangeOwnPassword()" style="width:100%;margin-top:8px;padding:11px;background:#BE6148;color:#fff;border:none;border-radius:10px;font-size:13.5px;font-weight:800;cursor:pointer">🔑 修改總管理員密碼</button>'
+    + '<button onclick="bossMigratePrivate()" style="width:100%;margin-top:8px;padding:11px;background:#7D3D2C;color:#fff;border:none;border-radius:10px;font-size:13.5px;font-weight:800;cursor:pointer">🔒 個資搬移到保護區（上鎖前執行一次）</button>'
     + '<div id="boss-add-form" style="display:none;background:#FDF0ED;border-radius:11px;padding:13px;margin-top:8px">'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
         + '<div><div style="font-size:11.5px;font-weight:700;color:#7D3D2C;margin-bottom:3px">姓名 *</div><input id="boss-ne-name" placeholder="例:王小明" style="width:100%;padding:8px 10px;border:1.5px solid #E5D5CF;border-radius:7px;font-size:13.5px;box-sizing:border-box"></div>'
@@ -8816,7 +8950,7 @@ window.bossSetPassword = async function(empId){
   }
   
   // 檢查重複
-  const pwPlaintext = await fbGet('passwordPlaintext') || {};
+  const pwPlaintext = await fbGet('private/passwordPlaintext') || {};
   const duplicate = Object.entries(pwPlaintext).find(([id, p]) => id !== empId && p === pw);
   if (duplicate){
     const dupEmp = EMPLOYEES.find(e => e.id === duplicate[0]);
@@ -8828,7 +8962,7 @@ window.bossSetPassword = async function(empId){
   
   const hashed = await hashPassword(pw);
   await fbUpdate('employees/' + empId, {passwordHash: hashed});
-  await fbUpdate('passwordPlaintext', {[empId]: pw});
+  await fbUpdate('private/passwordPlaintext', {[empId]: pw});
   
   // 紀錄
   await fbSet('passwordLogs/' + Date.now() + '_' + empId, {
@@ -8851,7 +8985,7 @@ window.bossResetPassword = async function(empId){
     return;
   }
   
-  const pwPlaintext = await fbGet('passwordPlaintext') || {};
+  const pwPlaintext = await fbGet('private/passwordPlaintext') || {};
   const duplicate = Object.entries(pwPlaintext).find(([id, p]) => id !== empId && p === pw);
   if (duplicate){
     const dupEmp = EMPLOYEES.find(e => e.id === duplicate[0]);
@@ -8863,7 +8997,7 @@ window.bossResetPassword = async function(empId){
   
   const hashed = await hashPassword(pw);
   await fbUpdate('employees/' + empId, {passwordHash: hashed});
-  await fbUpdate('passwordPlaintext', {[empId]: pw});
+  await fbUpdate('private/passwordPlaintext', {[empId]: pw});
   
   await fbSet('passwordLogs/' + Date.now() + '_' + empId, {
     empId, action: 'reset', by: (currentUser||{}).id, timestamp: new Date().toISOString()
