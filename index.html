@@ -6711,7 +6711,7 @@ const POSITION_TABLE = {
   '督導':   {baseSalary:0, managerBonus:0, type:'external'},
   'PT196': {hourly:196, type:'hourly'},
   'PT200': {hourly:200, type:'hourly'},
-  'PT230': {hourly:230, type:'hourly'},
+  'PT230': {hourly:230, type:'hourly', splitAfterH:5, splitHourly:196},  // ⭐ 每日前5h×230,第6h起×196
   'PT235': {hourly:235, type:'hourly'},
   'PT240': {hourly:240, type:'hourly'},
   'PT250': {hourly:250, type:'hourly'},
@@ -6817,7 +6817,16 @@ function calculateSalary(emp, monthData){
   if (pos.type === 'hourly'){
     // PT/時薪制:純按打卡時數
     hourlyRate = pos.hourly;
-    baseSalary = Math.round(hourlyRate * wh);
+    if (pos.splitAfterH && monthData.dailyHours){
+      // ⭐ 每日分段時薪(如PT230:每日前5h×230,第6h起×196);按「日」分段,逐日加總
+      let sum = 0;
+      Object.values(monthData.dailyHours).forEach(function(h){
+        sum += Math.min(h, pos.splitAfterH) * pos.hourly + Math.max(0, h - pos.splitAfterH) * pos.splitHourly;
+      });
+      baseSalary = Math.round(sum);
+    } else {
+      baseSalary = Math.round(hourlyRate * wh);
+    }
   } else {
     // 月薪制:時薪 × (打卡 + 全薪假 + 半薪假×0.5)
     // 驗證 IMG_1881 3月:193.18 × (123 + 8 + 48×0.5) = 29943 ✓
@@ -6972,6 +6981,7 @@ async function aggregateEmployeeMonthData(empId, year, month, prefetched){
   let workHours = 0;
   let dailyOTHours = 0;   // PT加班:每日超過8h的時數加總
   const storeHours = {};
+  const dailyHoursMap = {};  // ⭐ date → 當日時數(供PT分段時薪用)
   let lateMinutes = 0;
   
   // ⭐ 打卡資料結構:一筆 punch 是 {empId, date, type:'IN1'/'OUT1'/'IN2'/'OUT2', calcTime, storeId, lateMinutes}
@@ -7001,6 +7011,7 @@ async function aggregateEmployeeMonthData(empId, year, month, prefetched){
       if (dayHrs < 0) dayHrs = 0;
       workHours += dayHrs;
       dailyOTHours += Math.max(0, dayHrs - 8);   // 每日超過8h算PT加班
+      dailyHoursMap[date] = dayHrs;              // ⭐ 每日時數(供PT分段時薪用)
       const sid = d.storeId || 'unknown';
       storeHours[sid] = (storeHours[sid] || 0) + dayHrs;
     });
@@ -7039,6 +7050,7 @@ async function aggregateEmployeeMonthData(empId, year, month, prefetched){
   
   return {
     workHours, dailyOTHours, storeHours, fullLeaveH, halfLeaveH, noneLeaveH, lateMinutes,
+    dailyHours: dailyHoursMap,  // ⭐ 每日時數(PT分段時薪用)
     // ⭐ 細項
     annualH, officialH, funeralWeddingH, injuryPeriodH, personalH, familyH
   };
