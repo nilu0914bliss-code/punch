@@ -2654,7 +2654,7 @@ window.loadMyMonth = async function() {
     totalH += dayTotal;
     dayCalc[date] = {in1c, out1c, in2c, out2c, dh1, dh2, officialH, meetingH, dayTotal, hasMiss};
   });
-  const base = monthlyHours;
+  const base = await getMonthWH(now.getFullYear(), now.getMonth()+1);  // ⭐ 改讀該月 calendar 工時(與批次設定連動);沒設才用全域值
   const pct = Math.min(100,(totalH/base*100)).toFixed(0);
   const setEl = (id,val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
   // 只抓自己的 review
@@ -9237,7 +9237,7 @@ window.bossBatchSaveAll = async function(){
     }
     const now = new Date();
     const cur = (bossState.batchMonths || []).find(mo => mo.y === now.getFullYear() && mo.m === now.getMonth() + 1);
-    if (cur) monthlyHours = cur.workHours;
+    if (cur) { monthlyHours = cur.workHours; await fbSet('settings/monthlyHours', cur.workHours); }  // ⭐ 當月同步寫回全域,兩邊一致
     msg.textContent = '✓ 已儲存未來 12 個月設定';
     msg.style.color = '#10b981';
     toast('✓ 一整年設定已儲存', 's');
