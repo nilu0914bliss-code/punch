@@ -2636,8 +2636,11 @@ window.loadMyMonth = async function() {
     const d = byDate[date] || {};
     const in1c = d.IN1 || '', out1c = d.OUT1 || '';
     const in2c = d.IN2 || '', out2c = d.OUT2 || '';
-    const dh1 = (in1c && out1c) ? timeDiff(in1c, out1c) : 0;
-    const dh2 = (in2c && out2c) ? timeDiff(in2c, out2c) : 0;
+    // ⭐ 穩健時間解析:容錯 "H:MM"/"HH:MM"/前後空白;跨店日各段仍各自配對
+    const _mins = function(t){ if(!t) return null; var a=String(t).trim().split(':'); if(a.length<2) return null; var h=parseInt(a[0],10), m=parseInt(a[1],10); return (isNaN(h)||isNaN(m))?null:h*60+m; };
+    const _seg = function(i,o){ var a=_mins(i), b=_mins(o); if(a==null||b==null) return 0; var v=(b-a)/60; return v>0?v:0; };
+    const dh1 = _seg(in1c, out1c);
+    const dh2 = _seg(in2c, out2c);
     const dayLeaves = myLeaveByDate[date] || [];
     let officialH = 0, meetingH = 0, annualH = 0;
     dayLeaves.forEach(l => {
@@ -2651,6 +2654,7 @@ window.loadMyMonth = async function() {
     const hasMiss = (in1c && !out1c) || (!in1c && out1c) || (in2c && !out2c) || (!in2c && out2c);
     if (hasMiss) miss++;
     const dayTotal = parseFloat((dh1 + dh2 + meetingH).toFixed(1));
+    if ((in1c||out1c||in2c||out2c) && dayTotal===0) console.log("[工時除錯]", date, {in1c,out1c,in2c,out2c,dh1,dh2,meetingH});
     totalH += dayTotal;
     dayCalc[date] = {in1c, out1c, in2c, out2c, dh1, dh2, officialH, meetingH, dayTotal, hasMiss};
   });
