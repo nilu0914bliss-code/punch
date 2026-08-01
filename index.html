@@ -1194,6 +1194,7 @@ let EMPLOYEES = [];
 let punchState = {IN1:null,OUT1:null,IN2:null,OUT2:null};
 let pendingPunchType = '';
 let gpsOk = false;
+let gpsFailed = false;
 let gpsDist = 0;
 let activePunchStoreId = null;
 let activePunchStoreName = null;
@@ -1949,22 +1950,33 @@ updateClock();
 
 // ── GPS ──
 function initGPS() {
-  if (!navigator.geolocation) { setGPS(false, 999); return; }
+  if (!navigator.geolocation) { setGPS(false, 999, true); return; }
+  const gt = document.getElementById('gps-text');
+  if (gt) { gt.className = 'gps-fail'; gt.textContent = '📡 定位中…'; }
   navigator.geolocation.getCurrentPosition(pos => {
     const store = STORES.find(s => s.id === activePunchStoreId) || STORES[0];
-    if (!store) { setGPS(false, 999); return; }
+    if (!store) { setGPS(false, 999, true); return; }
     const dist = Math.round(haversine(pos.coords.latitude, pos.coords.longitude, store.lat, store.lng));
-    setGPS(dist <= store.radius, dist);
-  }, () => { setGPS(true, Math.floor(Math.random()*150+20)); }, {timeout:8000});
+    setGPS(dist <= store.radius, dist, false);
+  }, () => { setGPS(false, 0, true); }, {enableHighAccuracy:true, timeout:10000, maximumAge:0});  // ⭐ 定位失敗→擋住(不再放行),要求重試
 }
 
-function setGPS(ok, dist) {
-  gpsOk = ok; gpsDist = dist;
+function setGPS(ok, dist, failed) {
+  gpsOk = ok; gpsDist = dist; gpsFailed = !!failed;
   const store = STORES.find(s => s.id === activePunchStoreId) || STORES[0];
   const textEl = document.getElementById('gps-text');
   const detailEl = document.getElementById('gps-detail');
-  if (textEl) { textEl.className = ok ? 'gps-ok' : 'gps-fail'; textEl.textContent = ok ? '✅ 位於可打卡範圍內' : '❌ 超出打卡範圍'; }
-  if (detailEl && store) detailEl.textContent = '距' + store.name + ' ' + dist + ' 公尺（允許 ' + store.radius + ' 公尺）';
+  if (textEl) {
+    textEl.className = ok ? 'gps-ok' : 'gps-fail';
+    textEl.textContent = ok ? '✅ 位於可打卡範圍內' : (gpsFailed ? '❌ 定位失敗，請重試' : '❌ 超出打卡範圍');
+  }
+  if (detailEl && store) {
+    if (gpsFailed) {
+      detailEl.innerHTML = '抓不到位置。請到店門口、開啟手機定位（iPhone：設定→隱私→定位服務→Safari→精確位置），再按下方重試。 <button onclick="initGPS()" style="margin-left:4px;padding:4px 12px;background:#BE6148;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer">🔄 重試定位</button>';
+    } else {
+      detailEl.textContent = '距' + store.name + ' ' + dist + ' 公尺（允許 ' + store.radius + ' 公尺）';
+    }
+  }
   updatePunchBtns();
 }
 
@@ -2056,7 +2068,7 @@ function updatePunchBtns() {
 }
 
 window.openConfirm = function(type) {
-  if (!gpsOk) { toast('❌ GPS 超出範圍，無法打卡', 'd'); return; }
+  if (!gpsOk) { toast(gpsFailed ? '❌ 定位失敗，請按「重試定位」後再打卡' : '❌ GPS 超出範圍，無法打卡', 'd'); return; }
   pendingPunchType = type;
   const raw = getRaw(), calc = getRounded(type);
   const isIn = type.startsWith('IN');
@@ -2636,11 +2648,8 @@ window.loadMyMonth = async function() {
     const d = byDate[date] || {};
     const in1c = d.IN1 || '', out1c = d.OUT1 || '';
     const in2c = d.IN2 || '', out2c = d.OUT2 || '';
-    // ⭐ 穩健時間解析:容錯 "H:MM"/"HH:MM"/前後空白;跨店日各段仍各自配對
-    const _mins = function(t){ if(!t) return null; var a=String(t).trim().split(':'); if(a.length<2) return null; var h=parseInt(a[0],10), m=parseInt(a[1],10); return (isNaN(h)||isNaN(m))?null:h*60+m; };
-    const _seg = function(i,o){ var a=_mins(i), b=_mins(o); if(a==null||b==null) return 0; var v=(b-a)/60; return v>0?v:0; };
-    const dh1 = _seg(in1c, out1c);
-    const dh2 = _seg(in2c, out2c);
+    const dh1 = (in1c && out1c) ? timeDiff(in1c, out1c) : 0;
+    const dh2 = (in2c && out2c) ? timeDiff(in2c, out2c) : 0;
     const dayLeaves = myLeaveByDate[date] || [];
     let officialH = 0, meetingH = 0, annualH = 0;
     dayLeaves.forEach(l => {
@@ -2654,7 +2663,6 @@ window.loadMyMonth = async function() {
     const hasMiss = (in1c && !out1c) || (!in1c && out1c) || (in2c && !out2c) || (!in2c && out2c);
     if (hasMiss) miss++;
     const dayTotal = parseFloat((dh1 + dh2 + meetingH).toFixed(1));
-    if ((in1c||out1c||in2c||out2c) && dayTotal===0) console.log("[工時除錯]", date, {in1c,out1c,in2c,out2c,dh1,dh2,meetingH});
     totalH += dayTotal;
     dayCalc[date] = {in1c, out1c, in2c, out2c, dh1, dh2, officialH, meetingH, dayTotal, hasMiss};
   });
