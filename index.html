@@ -6990,13 +6990,14 @@ async function aggregateEmployeeMonthData(empId, year, month, prefetched){
   // ⭐ 打卡資料結構:一筆 punch 是 {empId, date, type:'IN1'/'OUT1'/'IN2'/'OUT2', calcTime, storeId, lateMinutes}
   // 要先按「日期 + 員工」分組,再從 IN1/OUT1, IN2/OUT2 配對算工時
   if (allPunches){
-    // 步驟 1: 按日期分組,每天裡放各 type 的 calcTime
-    const dailyPunches = {};  // date → {IN1, OUT1, IN2, OUT2, storeId, lateMins}
+    // 步驟 1: 按日期分組,每天裡放各 type 的 calcTime;⭐ 每段各自記自己的 storeId(跨店正確歸屬)
+    const dailyPunches = {};  // date → {IN1, OUT1, IN2, OUT2, s_IN1, s_IN2, ...}
     Object.values(allPunches).forEach(p => {
       if (p.empId !== empId || !p.date) return;
       if (p.date < monthStart || p.date > monthEnd) return;
       if (!dailyPunches[p.date]) dailyPunches[p.date] = {storeId: p.storeId};
       dailyPunches[p.date][p.type] = p.calcTime;
+      dailyPunches[p.date]['s_' + p.type] = p.storeId;   // ⭐ 記住這段打卡是哪家店
       // 遲到分鐘累加(可能各 punch 都有)
       if (p.lateMinutes) lateMinutes += p.lateMinutes;
     });
@@ -7005,18 +7006,25 @@ async function aggregateEmployeeMonthData(empId, year, month, prefetched){
     Object.keys(dailyPunches).forEach(date => {
       const d = dailyPunches[date];
       let dayHrs = 0;
+      let seg1 = 0, seg2 = 0;
       if (d.IN1 && d.OUT1){
-        dayHrs += (parseTime(d.OUT1) - parseTime(d.IN1)) / 3600;
+        seg1 = (parseTime(d.OUT1) - parseTime(d.IN1)) / 3600;
+        if (seg1 < 0) seg1 = 0;
+        dayHrs += seg1;
       }
       if (d.IN2 && d.OUT2){
-        dayHrs += (parseTime(d.OUT2) - parseTime(d.IN2)) / 3600;
+        seg2 = (parseTime(d.OUT2) - parseTime(d.IN2)) / 3600;
+        if (seg2 < 0) seg2 = 0;
+        dayHrs += seg2;
       }
-      if (dayHrs < 0) dayHrs = 0;
       workHours += dayHrs;
       dailyOTHours += Math.max(0, dayHrs - 8);   // 每日超過8h算PT加班
       dailyHoursMap[date] = dayHrs;              // ⭐ 每日時數(供PT分段時薪用)
-      const sid = d.storeId || 'unknown';
-      storeHours[sid] = (storeHours[sid] || 0) + dayHrs;
+      // ⭐ 各段各自歸店:第一段(IN1/OUT1)歸 s_IN1、第二段(IN2/OUT2)歸 s_IN2 —— 跨店正確分攤
+      const sid1 = d.s_IN1 || d.storeId || 'unknown';
+      const sid2 = d.s_IN2 || d.s_IN1 || d.storeId || 'unknown';
+      if (seg1 > 0) storeHours[sid1] = (storeHours[sid1] || 0) + seg1;
+      if (seg2 > 0) storeHours[sid2] = (storeHours[sid2] || 0) + seg2;
     });
   }
   
