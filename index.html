@@ -4422,7 +4422,12 @@ async function renderMonthTable() {
   const year = d.getFullYear(), month = d.getMonth() + 1;
   const label = document.getElementById('month-label');
   if (label) label.textContent = roc(year) + '年' + month + '月';
-  const base = parseInt((document.getElementById('base-hours')||{value:'176'}).value || 176);
+  // ⭐ 月基本工時改讀「當月」calendar 工時(與批次設定連動);沒設才用全域值
+  const base = await getMonthWH(year, month);
+  const _disp = document.getElementById('base-hours-display');
+  if (_disp) _disp.textContent = base;
+  const _bh = document.getElementById('base-hours');
+  if (_bh) _bh.value = base;
   const myStoreId = getActiveStoreId();
   const tbody = document.getElementById('month-tbody');
   if (!tbody) return;
