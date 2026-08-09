@@ -3902,6 +3902,7 @@ window.myMonthSwitchTab = function(tab){
   }
 };
 
+window.renderMySalary = renderMySalary;
 async function renderMySalary(){
   const sec = document.getElementById('mymonth-salary-section');
   if (!currentUser) return;
@@ -3925,9 +3926,7 @@ async function renderMySalary(){
   }
 
   // 預設顯示最新一個月;使用者選過且仍在清單中則沿用
-  console.log('[薪資除錯] mySalarySelYm=', JSON.stringify(window.mySalarySelYm), ' _monthKeys=', JSON.stringify(_monthKeys), ' indexOf=', _monthKeys.indexOf(window.mySalarySelYm));
   const selYm = (window.mySalarySelYm && _monthKeys.indexOf(window.mySalarySelYm) >= 0) ? window.mySalarySelYm : _monthKeys[0];
-  console.log('[薪資除錯] 最終 selYm=', selYm);
   let _mopts = '';
   for (const _v of _monthKeys) {
     const _y = _v.split('-')[0], _m = parseInt(_v.split('-')[1]);
