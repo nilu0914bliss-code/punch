@@ -7007,13 +7007,14 @@ async function aggregateEmployeeMonthData(empId, year, month, prefetched){
   let dailyOTHours = 0;   // PT加班:每日超過8h的時數加總
   const storeHours = {};
   const dailyHoursMap = {};  // ⭐ date → 當日時數(供PT分段時薪用)
+  let dailyPunchesOut = {};   // ⭐ 每日打卡明細(外層宣告,供return);避免作用域錯誤
   let lateMinutes = 0;
   
   // ⭐ 打卡資料結構:一筆 punch 是 {empId, date, type:'IN1'/'OUT1'/'IN2'/'OUT2', calcTime, storeId, lateMinutes}
   // 要先按「日期 + 員工」分組,再從 IN1/OUT1, IN2/OUT2 配對算工時
   if (allPunches){
     // 步驟 1: 按日期分組,每天裡放各 type 的 calcTime;⭐ 每段各自記自己的 storeId(跨店正確歸屬)
-    const dailyPunches = {};  // date → {IN1, OUT1, IN2, OUT2, s_IN1, s_IN2, ...}
+    const dailyPunches = dailyPunchesOut;  // ⭐ 指向外層變數,供return
     Object.values(allPunches).forEach(p => {
       if (p.empId !== empId || !p.date) return;
       if (p.date < monthStart || p.date > monthEnd) return;
@@ -7083,7 +7084,7 @@ async function aggregateEmployeeMonthData(empId, year, month, prefetched){
   
   return {
     workHours, dailyOTHours, storeHours, fullLeaveH, halfLeaveH, noneLeaveH, lateMinutes,
-    dailyPunches,  // ⭐ 每日打卡明細(各段時間+各段門市),供老闆展開查詢用;不影響計算
+    dailyPunches: dailyPunchesOut,  // ⭐ 每日打卡明細(各段時間+各段門市),供老闆展開查詢用;不影響計算
     dailyHours: dailyHoursMap,  // ⭐ 每日時數(PT分段時薪用)
     // ⭐ 細項
     annualH, officialH, funeralWeddingH, injuryPeriodH, personalH, familyH
