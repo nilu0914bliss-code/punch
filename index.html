@@ -3597,6 +3597,7 @@ window.mgrOpenKpi = async function(empId){
   
   // 外送津貼
   document.getElementById('mgr-kpi-delivery').value = existing.deliveryBonus || '';
+  var _tphEl = document.getElementById('mgr-kpi-typhoon'); if (_tphEl) _tphEl.value = existing.typhoonHours || '';
   
   document.getElementById('mgr-kpi-modal').style.display = 'flex';
 };
@@ -3844,6 +3845,7 @@ window.mgrSaveKpi = async function(){
       suggestions: document.getElementById('mgr-kpi-suggestions').value
     },
     deliveryBonus: parseInt(document.getElementById('mgr-kpi-delivery').value) || 0,
+    typhoonHours: parseFloat(document.getElementById('mgr-kpi-typhoon').value) || 0,
     reviewedBy: (currentUser||{}).id,
     reviewedAt: new Date().toISOString()
   };
@@ -7081,6 +7083,7 @@ async function aggregateEmployeeMonthData(empId, year, month, prefetched){
   
   return {
     workHours, dailyOTHours, storeHours, fullLeaveH, halfLeaveH, noneLeaveH, lateMinutes,
+    dailyPunches,  // ⭐ 每日打卡明細(各段時間+各段門市),供老闆展開查詢用;不影響計算
     dailyHours: dailyHoursMap,  // ⭐ 每日時數(PT分段時薪用)
     // ⭐ 細項
     annualH, officialH, funeralWeddingH, injuryPeriodH, personalH, familyH
@@ -7289,6 +7292,73 @@ window.bossApplyTyphoonAll = async function(){
 
 window._bossRefreshPayroll_old = function(){
   bossLoadPayroll();
+};
+
+// ⭐ 展開/收合員工整月每日明細(老闆用,免切帳號);資料取自記憶體,不重讀Firebase
+window.bossToggleDaily = function(empId, arrEl){
+  const rowEl = document.getElementById('daily-' + empId);
+  const innerEl = document.getElementById('daily-inner-' + empId);
+  if (!rowEl || !innerEl) return;
+  if (rowEl.style.display !== 'none'){
+    rowEl.style.display = 'none';
+    arrEl.textContent = '▸';
+    return;
+  }
+  // 展開:排版每日明細
+  const D = (window._bossDailyData || {})[empId];
+  if (!D){ innerEl.innerHTML = '<span style="font-size:12px;color:#9CA3AF">無資料</span>'; rowEl.style.display=''; arrEl.textContent='▾'; return; }
+  const daily = D.daily || {};
+  const dates = Object.keys(daily).sort();
+  const sName = function(sid){ const s = STORES.find(function(x){return x.id===sid;}); return s?s.name:(sid||'—'); };
+  const fmt = function(a,b){ return (a&&b) ? (a+'–'+b) : (a? a+'–?' : (b? '?–'+b : '—')); };
+  let crossDays = 0, patchDays = 0;
+  let rows = '';
+  if (!dates.length){
+    rows = '<tr><td colspan="6" style="padding:8px;color:#9CA3AF;text-align:center">本月無打卡紀錄</td></tr>';
+  } else {
+    dates.forEach(function(date){
+      const d = daily[date];
+      let seg1=0, seg2=0;
+      if (d.IN1&&d.OUT1){ const v=(parseTime(d.OUT1)-parseTime(d.IN1))/3600; if(v>0)seg1=v; }
+      if (d.IN2&&d.OUT2){ const v=(parseTime(d.OUT2)-parseTime(d.IN2))/3600; if(v>0)seg2=v; }
+      const dayH = seg1+seg2;
+      // 各段門市
+      const s1 = d.s_IN1 || d.storeId, s2 = d.s_IN2 || d.s_IN1 || d.storeId;
+      const isCross = (d.s_IN1 && d.s_IN2 && d.s_IN1 !== d.s_IN2) || (d.s_IN1 && d.s_OUT2 && d.s_IN1 !== d.s_OUT2);
+      if (isCross) crossDays++;
+      // 段落顯示(跨店時各段標店名)
+      const uniqStores = {}; ['s_IN1','s_OUT1','s_IN2','s_OUT2'].forEach(function(k){ if(d[k]) uniqStores[d[k]]=1; });
+      const multiStore = Object.keys(uniqStores).length > 1;
+      const seg1txt = fmt(d.IN1,d.OUT1) + (multiStore && s1 ? ' <span style="color:#9CA3AF">'+sName(s1)+'</span>' : '');
+      const seg2txt = fmt(d.IN2,d.OUT2) + (multiStore && s2 ? ' <span style="color:#9CA3AF">'+sName(s2)+'</span>' : '');
+      const storeCol = multiStore ? '<span style="color:#DC2626;font-weight:700">跨店</span>' : sName(s1);
+      rows += '<tr><td style="padding:6px 7px;border-top:1px solid #ECE3DF">'+date.substr(5)+'</td>'
+        + '<td style="padding:6px 7px;border-top:1px solid #ECE3DF">'+seg1txt+'</td>'
+        + '<td style="padding:6px 7px;border-top:1px solid #ECE3DF">'+seg2txt+'</td>'
+        + '<td style="padding:6px 7px;border-top:1px solid #ECE3DF;text-align:right">'+(dayH>0?dayH.toFixed(1)+'h':'—')+'</td>'
+        + '<td style="padding:6px 7px;border-top:1px solid #ECE3DF">'+storeCol+'</td></tr>';
+    });
+  }
+  const parts = [];
+  parts.push('打卡 <b>'+D.wh.toFixed(1)+'h</b>');
+  if (D.fullL>0) parts.push('全薪假 '+D.fullL+'h');
+  if (D.halfL>0) parts.push('半薪假 '+D.halfL+'h');
+  if (D.noneL>0) parts.push('事假 '+D.noneL+'h');
+  if (D.typhoon>0) parts.push('🌀颱風假 '+D.typhoon+'h');
+  if (crossDays>0) parts.push('跨店 <b>'+crossDays+'</b> 天');
+  if (D.late>0) parts.push('遲到 '+Math.round(D.late)+' 分');
+  innerEl.innerHTML =
+    '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr style="background:#F3EAE6;color:#7D3D2C">'
+    + '<th style="padding:6px 7px;text-align:left;font-size:10.5px">日期</th>'
+    + '<th style="padding:6px 7px;text-align:left;font-size:10.5px">第一段</th>'
+    + '<th style="padding:6px 7px;text-align:left;font-size:10.5px">第二段</th>'
+    + '<th style="padding:6px 7px;text-align:right;font-size:10.5px">當日工時</th>'
+    + '<th style="padding:6px 7px;text-align:left;font-size:10.5px">門市</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody></table>'
+    + '<div style="margin-top:8px;font-size:11.5px;color:#8A7B74;border-top:1px dashed #E5D5CF;padding-top:7px">本月合計：' + parts.join('　·　') + '</div>';
+  rowEl.style.display = '';
+  arrEl.textContent = '▾';
 };
 
 // ⭐ 展開/收合打卡時數的分店明細
@@ -8448,6 +8518,7 @@ async function bossLoadPayroll(){
     const kpi = kpiDataObj[emp.id] || {};
     monthData.disciplineScore = kpi.discipline !== undefined ? kpi.discipline : 10;
     monthData.deliveryBonus = kpi.deliveryBonus !== undefined ? kpi.deliveryBonus : 0;  // 外送津貼從KPI直接帶(老闆黃格仍可覆蓋)
+    if (kpi.typhoonHours !== undefined) monthData.typhoonHours = kpi.typhoonHours;  // 🌀 颱風假從KPI帶(主管填;老闆薪資表仍可覆蓋)
     monthData.isBirthdayMonth = isBirthdayThisMonth(emp.birthday, bossState.year, bossState.month);
     
     // 套用老闆改過的黃格
@@ -8586,7 +8657,7 @@ function renderPayrollTable(rows){
     }
     const crossTag = r.crossStore ? '<span style="display:inline-block;font-size:9px;font-weight:800;background:#FDF0ED;color:#BE6148;padding:1px 5px;border-radius:10px;margin-left:4px">跨店</span>' : '';
     const notHomeTag = (!r.calc._isHome) ? '<span style="display:inline-block;font-size:9px;font-weight:700;background:#F3F4F6;color:#6B7280;padding:1px 5px;border-radius:10px;margin-left:4px">此店僅底薪</span>' : '';
-    html += '<td style="padding:6px 8px;border:1px solid #E5E7EB;font-weight:700;text-align:left;position:sticky;left:0;background:#fff;z-index:1">' + emp.name + crossTag + notHomeTag + homeCell + '</td>';
+    html += '<td style="padding:6px 8px;border:1px solid #E5E7EB;font-weight:700;text-align:left;position:sticky;left:0;background:#fff;z-index:1"><span onclick="bossToggleDaily(\'' + emp.id + '\',this)" style="cursor:pointer;color:#BE6148;font-size:11px;margin-right:3px;user-select:none">▸</span>' + emp.name + crossTag + notHomeTag + homeCell + '</td>';
     var _posOpts = ['督導','店長','副店長','組長','領班','正職人員','實習正職','PT196','PT200','PT230','PT235','PT240','PT250','PT300'].map(function(p){ return '<option value="'+p+'"'+(p===r.monthPosition?' selected':'')+'>'+p+'</option>'; }).join('');
     html += '<td style="padding:4px;border:1px solid #E5E7EB;text-align:center"><select onchange="bossSetMonthPosition(\''+emp.id+'\',this.value)" style="font-size:11px;padding:3px 4px;border:1px solid #E5D5CF;border-radius:5px;background:#FDF7F5;font-family:inherit;max-width:78px">'+_posOpts+'</select>'+((r.monthPosition!==emp.position)?'<div style="font-size:9px;color:#BE6148;margin-top:1px;font-weight:700">當月</div>':'')+'</td>';
     // 打卡時數 (顯示本店時數;tooltip 看各店明細與合計)
@@ -8640,6 +8711,10 @@ function renderPayrollTable(rows){
     }
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;font-weight:800;color:#7D3D2C">' + c.actualPay.toLocaleString() + '</td>';
     html += '</tr>';
+    // ⭐ 每日明細列(預設隱藏,點名字前的▸展開);資料存 window,不重讀 Firebase
+    if (!window._bossDailyData) window._bossDailyData = {};
+    window._bossDailyData[emp.id] = { daily: md.dailyPunches || {}, late: md.lateMinutes || 0, cross: r.crossStore, name: emp.name, wh: md.workHours||0, fullL: md.fullLeaveH||0, halfL: md.halfLeaveH||0, noneL: md.noneLeaveH||0, typhoon: md.typhoonHours||0 };
+    html += '<tr id="daily-' + emp.id + '" style="display:none"><td colspan="24" style="padding:0;background:#FAF7F5;border:1px solid #E5E7EB"><div id="daily-inner-' + emp.id + '" style="padding:11px 15px"></div></td></tr>';
   });
   
   // 合計
@@ -10350,6 +10425,7 @@ initApp().then(() => {
       <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">缺點</div><textarea id="mgr-kpi-weaknesses" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
       <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">協助方式 & 人員進程規劃</div><textarea id="mgr-kpi-suggestions" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
       <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">本月外送津貼總額 (NT$)</div><input type="number" id="mgr-kpi-delivery" placeholder="0" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;box-sizing:border-box"></div>
+      <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">🌀 本月颱風假時數 (小時)</div><input type="number" id="mgr-kpi-typhoon" placeholder="0" step="0.5" min="0" style="width:100%;padding:8px;border:1.5px solid #F87171;border-radius:6px;font-size:13px;box-sizing:border-box;background:#FEF6F6"><div style="font-size:11px;color:#9CA3AF;margin-top:3px">無薪假(比照事假)。填此員工本月因颱風停班的時數，會自動帶入薪資表。</div></div>
       <button onclick="mgrSaveKpi()" style="width:100%;padding:12px;margin-top:13px;background:#BE6148;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer">儲存評分</button>
     </div>
   </div>
