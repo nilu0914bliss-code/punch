@@ -3956,6 +3956,7 @@ async function renderMySalary(){
   if (saved.managerBonus !== undefined) monthData.managerBonus = saved.managerBonus;
   if (saved.salesBonus !== undefined) monthData.salesBonus = saved.salesBonus;
   if (saved.deliveryBonus !== undefined) monthData.deliveryBonus = saved.deliveryBonus;
+  if (saved.typhoonHours !== undefined) monthData.typhoonHours = saved.typhoonHours;  // ⭐ 颱風假(純顯示)
   if (saved.performanceBonus !== undefined) monthData.performanceBonus = saved.performanceBonus;
   if (saved.annualLeaveCash !== undefined) monthData.annualLeaveCash = saved.annualLeaveCash;
   
@@ -4019,6 +4020,7 @@ async function renderMySalary(){
   // ─ 無薪 ─
   html += sectionLabel('無薪 (0% 薪)', '#c00');
   html += row('📝 事假', (monthData.personalH || monthData.noneLeaveH || 0) + ' h');
+  if ((monthData.typhoonHours || 0) > 0) html += row('🌀 颱風假（無薪）', monthData.typhoonHours + ' h');  // ⭐ 純顯示,不影響金額
   
   html += '</div>';
   
@@ -4422,12 +4424,7 @@ async function renderMonthTable() {
   const year = d.getFullYear(), month = d.getMonth() + 1;
   const label = document.getElementById('month-label');
   if (label) label.textContent = roc(year) + '年' + month + '月';
-  // ⭐ 月基本工時改讀「當月」calendar 工時(與批次設定連動);沒設才用全域值
-  const base = await getMonthWH(year, month);
-  const _disp = document.getElementById('base-hours-display');
-  if (_disp) _disp.textContent = base;
-  const _bh = document.getElementById('base-hours');
-  if (_bh) _bh.value = base;
+  const base = parseInt((document.getElementById('base-hours')||{value:'176'}).value || 176);
   const myStoreId = getActiveStoreId();
   const tbody = document.getElementById('month-tbody');
   if (!tbody) return;
@@ -6880,13 +6877,18 @@ function calculateSalary(emp, monthData){
   }
   
   // === 4. 加班費 ===
-  // 加班費 = (月實際工時 − 月基本工時) × 時薪 × 4/3
-  // 月底結算超出標準工時的部分
   let overtimePay = 0;
   let overtimeH = 0;
   if (pos.type === 'monthly'){
-    // 正職/主管:月結算,(打卡總工時 - 標準工時) x (37000/30/8)x1.33,不分職位/階梯
-    overtimeH = Math.max(0, wh - sh);
+    // ⭐ 正職/主管加班(比照督導公式,加班與請假分開不折抵):
+    //    貢獻時數 = 打卡 + 全薪假 + 半薪假×0.5
+    //    加班門檻 = 月基本工時 − 無薪假(事假 + 颱風假)   ← 無薪假那天本來就不用上,門檻下降
+    //    加班時數 = 貢獻時數 − 加班門檻
+    //    例:全佳韻 月基本184、打卡176、特休8、颱風8 → (176+8) − (184−8) = 184−176 = 8h
+    const typhoonH = monthData.typhoonHours || 0;
+    const contribH = wh + fullL + halfL * 0.5;
+    const otThreshold = Math.max(0, sh - noneL - typhoonH);
+    overtimeH = Math.max(0, contribH - otThreshold);
     overtimePay = Math.round(overtimeH * (37000/30/8) * 1.33);
   } else {
     // PT:每日超過8h x PT時薪 x 0.33(只加成,基本時薪已含於底薪)
@@ -6895,7 +6897,8 @@ function calculateSalary(emp, monthData){
   }
   
   // === 5. 生日禮金 ===
-  const birthdayGift = isBday ? 200 : 0;
+  // ⭐ PT(時薪制)無生日禮金;僅月薪制(正職/主管)當月生日給 200
+  const birthdayGift = (isBday && pos.type !== 'hourly') ? 200 : 0;
   
   // === 6. 特休折現 ===
   const annualLeaveCash = monthData.annualLeaveCash || 0;
@@ -7246,6 +7249,45 @@ window.bossOnMonthChange = function(){
 };
 
 window.bossRefreshPayroll = function(){
+  bossLoadPayroll();
+};
+
+// ⭐ 颱風假:單筆修改(純記錄,不進薪資計算)
+window.bossEditTyphoon = async function(empId, cur){
+  const v = prompt('颱風假時數（小時）\n\n此為無薪假記錄，比照事假：不算工時、不影響薪資與加班。', cur || 0);
+  if (v === null) return;
+  const n = parseFloat(v);
+  if (isNaN(n) || n < 0){ toast('請輸入 0 或正數', 'd'); return; }
+  const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
+  try {
+    await fbUpdate('salaries/' + yyyymm + '/' + empId, { typhoonHours: n });
+    toast('✓ 颱風假已更新', 's');
+    bossLoadPayroll();
+  } catch(e){ toast('儲存失敗，請重試', 'd'); }
+};
+
+// ⭐ 颱風假:一鍵套用「本店全員」(只套當前門市,不跨店)
+window.bossApplyTyphoonAll = async function(){
+  const el = document.getElementById('boss-typhoon-all');
+  const n = parseFloat(el ? el.value : '');
+  if (isNaN(n) || n < 0){ toast('請先輸入時數', 'd'); return; }
+  const storeId = bossState.storeId;
+  const store = STORES.find(function(s){ return s.id === storeId; });
+  const storeName = store ? store.name : '本店';
+  const emps = EMPLOYEES.filter(function(e){ return e.active !== false && e.role !== 'superadmin' && e.storeId === storeId; });
+  if (!emps.length){ toast('本店沒有員工', 'd'); return; }
+  if (!confirm('將「' + storeName + '」全部 ' + emps.length + ' 位員工的颱風假設為 ' + n + ' 小時？\n\n（只套用這一家店，個別要改再點格子。此為無薪記錄，不影響薪資計算。）')) return;
+  const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
+  const updates = {};
+  emps.forEach(function(e){ updates['salaries/' + yyyymm + '/' + e.id + '/typhoonHours'] = n; });
+  try {
+    await fbUpdate('', updates);
+    toast('✓ 已套用本店全員（' + emps.length + ' 人）', 's');
+    bossLoadPayroll();
+  } catch(e){ toast('套用失敗，請重試', 'd'); }
+};
+
+window._bossRefreshPayroll_old = function(){
   bossLoadPayroll();
 };
 
@@ -8414,6 +8456,7 @@ async function bossLoadPayroll(){
     if (saved.salesBonus !== undefined) monthData.salesBonus = saved.salesBonus;
     if (saved.deliveryBonus !== undefined) monthData.deliveryBonus = saved.deliveryBonus;
     if (saved.performanceBonus !== undefined) monthData.performanceBonus = saved.performanceBonus;
+    if (saved.typhoonHours !== undefined) monthData.typhoonHours = saved.typhoonHours;  // ⭐ 颱風假(純記錄,不進計算)
     // ⭐ 特休折現:開關開啟且未手動填 → 自動帶入(正職 剩餘×1133;PT 剩餘×8×平均工時×時薪)
     if (saved.annualLeaveCash !== undefined) {
       monthData.annualLeaveCash = saved.annualLeaveCash;
@@ -8491,6 +8534,7 @@ function renderPayrollTable(rows){
   const _storeNm = (STORES.find(function(s){return s.id===bossState.storeId;})||{}).name || bossState.storeId;
   const _mustPay = rows.reduce(function(a,r){ return a + (r.calc.actualPay||0); }, 0);
   html += '<div style="background:#7D3D2C;color:#fff;border-radius:10px;padding:12px 15px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:12px;opacity:.85">💰 '+_storeNm+' · 本店應匯(實領合計)</div><div style="font-size:20px;font-weight:800">$'+_mustPay.toLocaleString()+'</div></div>';
+  html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1.5px solid #BE6148;border-radius:11px;padding:11px 14px;margin-bottom:10px"><span style="font-size:19px">🌀</span><div><div style="font-weight:800;color:#7D3D2C;font-size:13px">本月颱風假時數</div><div style="font-size:11px;color:#9CA3AF">套用「本店全員」；個別要改再點下方格子。無薪記錄，不影響薪資計算。</div></div><div style="flex:1"></div><input type="number" id="boss-typhoon-all" min="0" step="0.5" placeholder="0" style="width:80px;padding:8px 10px;border:1.5px solid #E5D5CF;border-radius:8px;font-size:15px;font-weight:800;text-align:right;font-family:inherit"><span style="font-size:12px;color:#9CA3AF">小時</span><button onclick="bossApplyTyphoonAll()" style="padding:9px 16px;background:#BE6148;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">套用本店全員</button></div>';
   html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button onclick="bossExportPayrollCSV()" style="padding:8px 15px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer">📥 下載薪資總表(報勞保/稽核用)</button></div>';
   html += '<table style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap"><thead>';
   // 雙層表頭 (跟老闆紙本一樣)
@@ -8501,6 +8545,7 @@ function renderPayrollTable(rows){
   html += '<th colspan="3" style="padding:6px;border:1px solid #E5E7EB;background:#E0F2FE;color:#0c4a6e">全薪假時數</th>';
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB;background:#FEF3C7;color:#92400E">半薪<br>傷病/生理</th>';
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB;background:#FEE2E2;color:#991b1b">無薪<br>事假</th>';
+  html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB;background:#FEE2E2;color:#991b1b">🌀颱風假<br><span style="font-weight:400;font-size:9px">(同事假·無薪)</span></th>';
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB;background:#7D3D2C;color:#fff">底薪</th>';
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB">紀律</th>';
   html += '<th rowspan="2" style="padding:6px;border:1px solid #E5E7EB">出勤</th>';
@@ -8563,6 +8608,9 @@ function renderPayrollTable(rows){
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;background:#F0F9FF">' + (md.funeralWeddingH || 0) + '</td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;background:#FFFBEB">' + (md.injuryPeriodH || md.halfLeaveH || 0) + '</td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;background:#FEF2F2">' + (md.personalH || md.noneLeaveH || 0) + '</td>';
+    // ⭐ 颱風假(無薪,純記錄,不進計算):可點擊修改,存 salaries/{月}/{員工}/typhoonHours
+    var _tph = (md.typhoonHours != null) ? md.typhoonHours : 0;
+    html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;background:#FEF2F2"><span onclick="bossEditTyphoon(\'' + emp.id + '\',' + _tph + ')" style="background:#FEE2E2;border:1px dashed #F87171;border-radius:4px;padding:2px 7px;cursor:pointer;display:inline-block;font-weight:700;color:' + (_tph>0?'#991b1b':'#D1B5B5') + '">' + (_tph>0? _tph+'h' : '—') + '</span></td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;font-weight:700">' + c.baseSalary.toLocaleString() + '</td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;color:' + (c.disciplineBonus>0?'#10b981':'#9CA3AF') + ';font-weight:700">' + (c.disciplineBonus||'—') + '</td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right">' + (c.attendanceBonus||0) + '</td>';
@@ -9979,8 +10027,9 @@ initApp().then(() => {
         <div style="text-align:center;color:#9CA3AF;padding:30px">載入中…</div>
       </div>
       <div style="background:#FEF9E7;border-left:3px solid #F59E0B;padding:10px 13px;border-radius:6px;font-size:11.5px;color:#374151;margin-top:11px;line-height:1.7">
-        <b>系統自動算：</b>底薪、紀律獎金、出勤獎金、加班費、生日禮金、勞健保自付。<br>
-        <b>🟡 黃色格 = 老闆可手動覆蓋：</b>主管/業務津貼、績效獎金、特休折現。
+        <b>系統自動算：</b>底薪、紀律獎金、出勤獎金、加班費、生日禮金（僅正職/主管，PT 無）、勞健保自付。<br>
+        <b>🟡 黃色格 = 老闆可手動覆蓋：</b>主管/業務津貼、績效獎金、特休折現。<br>
+        <b>🌀 颱風假：</b>屬<b>無薪假</b>（比照事假，不計底薪工時）。會降低當月加班門檻，讓加班與請假分開計算、不互相折抵。
       </div>
     </section>
 
