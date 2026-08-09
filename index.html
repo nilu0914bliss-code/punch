@@ -1784,13 +1784,19 @@ async function loadNotice() {
   emptyEl.style.display = 'none';
 
   try {
-    const data = await fbGet('announcements/calendar');
+    // ⭐ 讀老闆上傳的公告(announcements/current, 欄位 imageBase64);相容舊的 calendar/image
+    let data = await fbGet('announcements/current');
+    let imgSrc = data && (data.imageBase64 || data.image);
+    if (!imgSrc){
+      const legacy = await fbGet('announcements/calendar');
+      if (legacy){ data = legacy; imgSrc = legacy.image || legacy.imageBase64; }
+    }
     loadingEl.style.display = 'none';
-    if (data && data.image) {
-      document.getElementById('notice-img').src = data.image;
-      document.getElementById('notice-title').textContent = data.title || '年度行事曆';
-      const date = data.uploadedAt ? rocTL(data.uploadedAt) : '';
-      const sizeKB = data.sizeKB ? ' · ' + data.sizeKB + ' KB' : '';
+    if (imgSrc) {
+      document.getElementById('notice-img').src = imgSrc;
+      document.getElementById('notice-title').textContent = (data && data.title) || '公告';
+      const date = (data && data.uploadedAt) ? rocTL(data.uploadedAt) : '';
+      const sizeKB = (data && data.sizeKB) ? ' · ' + data.sizeKB + ' KB' : '';
       document.getElementById('notice-meta').textContent = date ? ('上傳於 ' + date + sizeKB) : '';
       cardEl.style.display = 'block';
     } else {
@@ -8788,7 +8794,7 @@ window.bossSetMonthPosition = async function(empId, position){
 window.bossToggleSettle = async function(){
   const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
   if (!bossState.settled){
-    if (!confirm('確認結算 ' + roc(bossState.year) + '年' + bossState.month + '月 薪資?\n結算後員工會在每月 10 號開放查看薪資條。')) return;
+    if (!confirm('⚠️ 確定要結算 ' + roc(bossState.year) + '年' + bossState.month + '月 薪資嗎?\n\n結算後：\n・當月薪資、所屬門市會鎖定\n・員工將於每月 10 號開放查看薪資條\n\n請確認已核對完成再結算。')) return;
     // ⭐ 凍結當月所屬門市:未曾指定過的人,以目前 storeId 存檔;以後轉店不影響此月
     try{
       const _existing = await fbGet('salaries/' + yyyymm) || {};
@@ -10103,7 +10109,7 @@ initApp().then(() => {
         <span style="float:right;display:flex;gap:8px;align-items:center">
           <span id="boss-settle-status" style="font-size:12px;color:#F59E0B;font-weight:700;padding:6px 11px;background:#FEF3C7;border-radius:7px">⏳ 尚未結算</span>
           <button onclick="bossToggleSettle()" id="boss-settle-btn" style="padding:8px 16px;background:#10b981;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✓ 確認結算</button>
-          <button onclick="bossRefreshPayroll()" style="padding:8px 16px;background:#BE6148;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔄 重新計算</button>
+
         </span>
       </h2>
       <div id="boss-payroll-content" style="background:#fff;border-radius:11px;padding:13px;overflow-x:auto">
