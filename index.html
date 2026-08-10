@@ -8465,7 +8465,7 @@ function distributeCalcToStore(md, calc, storeS, homeStore){
   }
   const F = function(v){ return isHome ? (v||0) : 0; };  // 定額:只在所屬店整筆
   const baseSalary  = splitHourly(calc.baseSalary);
-  const overtimePay = splitHourly(calc.overtimePay);
+  const overtimePay = F(calc.overtimePay);  // ⭐ 加班費整筆歸所屬店(跨店支援店只出時薪、不分加班)
   const disciplineBonus  = F(calc.disciplineBonus);
   const attendanceBonus  = F(calc.attendanceBonus);
   const birthdayGift     = F(calc.birthdayGift);
@@ -8696,7 +8696,12 @@ function renderPayrollTable(rows){
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;background:#FEF2F2">' + (md.personalH || md.noneLeaveH || 0) + '</td>';
     // ⭐ 颱風假(無薪,純記錄,不進計算):可點擊修改,存 salaries/{月}/{員工}/typhoonHours
     var _tph = (md.typhoonHours != null) ? md.typhoonHours : 0;
-    html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;background:#FEF2F2"><span onclick="bossEditTyphoon(\'' + emp.id + '\',' + _tph + ')" style="background:#FEE2E2;border:1px dashed #F87171;border-radius:4px;padding:2px 7px;cursor:pointer;display:inline-block;font-weight:700;color:' + (_tph>0?'#991b1b':'#D1B5B5') + '">' + (_tph>0? _tph+'h' : '—') + '</span></td>';
+    if (!r.calc._isHome){
+      // ⭐ 跨店支援店:颱風假歸所屬店,此店不顯示時數也不可編輯(避免誤會/誤改)
+      html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;background:#FEF2F2"><span title="颱風假歸所屬店" style="color:#D1B5B5;font-weight:700">—</span></td>';
+    } else {
+      html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;background:#FEF2F2"><span onclick="bossEditTyphoon(\'' + emp.id + '\',' + _tph + ')" style="background:#FEE2E2;border:1px dashed #F87171;border-radius:4px;padding:2px 7px;cursor:pointer;display:inline-block;font-weight:700;color:' + (_tph>0?'#991b1b':'#D1B5B5') + '">' + (_tph>0? _tph+'h' : '—') + '</span></td>';
+    }
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;font-weight:700">' + c.baseSalary.toLocaleString() + '</td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right;color:' + (c.disciplineBonus>0?'#10b981':'#9CA3AF') + ';font-weight:700">' + (c.disciplineBonus||'—') + '</td>';
     html += '<td style="padding:6px;border:1px solid #E5E7EB;text-align:right">' + (c.attendanceBonus||0) + '</td>';
