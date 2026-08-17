@@ -3371,7 +3371,7 @@ window.mgrLoadKpiList = async function(){
       banner.style.background = '#FEF9E7';
       banner.style.color = '#92400E';
       banner.style.border = '1px solid #F59E0B';
-      banner.innerHTML = '📋 <b>' + kpiYear + '/' + kpiMonth + '月 KPI 還有 ' + pending + ' 位員工未評分</b><br>' + (DOWN_ANYTIME ? '主管可隨時填寫,記得盡早完成喔' : '主管填寫期間:' + kpiWinText(false, DOWN_OPEN_DAY, DOWN_END_DAY));
+      banner.innerHTML = '📋 <b>' + kpiYear + '/' + kpiMonth + '月 KPI 還有 ' + pending + ' 位員工未評分</b><br>' + (DOWN_ANYTIME ? ('主管可隨時填寫,建議 ' + downDeadlineText(yyyymm) + ' 前完成') : '主管填寫期間:' + kpiWinText(false, DOWN_OPEN_DAY, DOWN_END_DAY));
       banner.style.display = 'block';
     }
   }
@@ -3655,6 +3655,25 @@ function upwardDeadlineLabel(ym){
   var y = parseInt(ym.split('-')[0]), m = parseInt(ym.split('-')[1]);
   var last = new Date(y, m, 0).getDate();
   return m + '/' + last;
+}
+// ⭐ 依後台「下對上」設定回傳實際截止日文字(隨時可填 / 次月X號 / 當月月底),首頁提醒用
+function upwardDeadlineText(ym){
+  if (UPWARD_ANYTIME) return '隨時可填';
+  var y = parseInt(ym.split('-')[0]), m = parseInt(ym.split('-')[1]);
+  if (UPWARD_END_DAY > 0){                 // 跨月:次月 X 號
+    var nm = m + 1, ny = y; if (nm === 13){ nm = 1; ny++; }
+    return nm + '/' + UPWARD_END_DAY;
+  }
+  return m + '/' + new Date(y, m, 0).getDate();   // 當月月底
+}
+// ⭐ 依後台「上對下」設定回傳實際截止日文字(次月X號 / 當月月底),首頁 KPI 提醒用
+function downDeadlineText(ym){
+  var y = parseInt(ym.split('-')[0]), m = parseInt(ym.split('-')[1]);
+  if (DOWN_END_DAY > 0){                 // 跨月:次月 X 號
+    var nm = m + 1, ny = y; if (nm === 13){ nm = 1; ny++; }
+    return nm + '/' + DOWN_END_DAY;
+  }
+  return m + '/' + new Date(y, m, 0).getDate();   // 當月月底
 }
 function upwardWindowLabel(ym){ return UPWARD_OPEN_DAY + ' ~ ' + upwardDeadlineLabel(ym) + '（月底前）'; }
 function upwardIsOpen(){
@@ -7966,7 +7985,7 @@ async function mgrLoadUpwardProgress(){
   var missing=raters.filter(function(e){ return !doneIds[e.id]; });
   var sub=raters.length-missing.length;
   var html='<div style="background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:12px 14px;margin-bottom:8px">';
-  html+='<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13px;font-weight:800;color:#7D3D2C">📋 本月主管評核進度</div><div style="font-size:12px;color:#b45309;font-weight:700">月底前 '+upwardDeadlineLabel(ym)+' 截止</div></div>';
+  html+='<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13px;font-weight:800;color:#7D3D2C">📋 本月主管評核進度</div><div style="font-size:12px;color:#b45309;font-weight:700">'+(UPWARD_ANYTIME?'🕒 隨時可填':'截止 '+upwardDeadlineText(ym))+'</div></div>';
   html+='<div style="font-size:13px;font-weight:800;margin-top:6px;color:'+(missing.length?'#dc2626':'#16a34a')+'">已交 '+sub+'/'+raters.length+(missing.length?(' · 未交 '+missing.length+' 人'):' · 全員已交 ✓')+'</div>';
   if(missing.length){
     html+='<div style="font-size:12px;color:#6B7280;margin-top:5px;line-height:1.6">尚未評分：'+missing.map(function(e){return e.name;}).join('、')+'</div>';
