@@ -451,6 +451,13 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
   </div>
 </div>
 
+<!-- ⭐ 業績登打權限:只在「業績登打」模式下,只顯示業績區塊,其餘全部隱藏 -->
+<style id="rev-only-css">
+  body.rev-only #pg-overview > *{ display:none !important; }
+  body.rev-only #pg-overview > .banner{ display:flex !important; }
+  body.rev-only #pg-overview > .rev-keep{ display:block !important; }
+  body.rev-only #main-nav{ display:none !important; }
+</style>
 <!-- MGR: 總覽 -->
 <div class="page" id="pg-overview">
   <div class="banner mgr">
@@ -472,7 +479,7 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
     </div>
     <div style="font-size:12px;color:var(--g4)" id="ov-date"></div>
   </div>
-  <div id="overview-rev-missing" style="padding:0 14px"></div>
+  <div id="overview-rev-missing" class="rev-keep" style="padding:0 14px"></div>
   <div id="mgr-upward-progress" style="padding:0 14px"></div>
   <div class="sec"><div class="sec-title">今日打卡狀況</div></div>
   <div id="overview-emp-list"><div class="loading-spin"></div></div>
@@ -486,13 +493,13 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
 
   <!-- ⭐ 主管端:業績登錄 -->
   <div class="divider" style="margin-top:8px"></div>
-  <div class="sec" style="padding-top:12px">
+  <div class="sec rev-keep" style="padding-top:12px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <div class="sec-title" style="margin-bottom:0">📈 業績登錄</div>
       <div id="mgr-rev-status" style="font-size:11px;color:var(--g5)"></div>
     </div>
   </div>
-  <div style="padding:0 14px 14px">
+  <div class="rev-keep" style="padding:0 14px 14px">
     <!-- 日期選擇 -->
     <div style="display:flex;gap:7px;align-items:center;margin-bottom:9px">
       <span style="font-size:12px;color:#6B7280;font-weight:700">登錄日期:</span>
@@ -1376,7 +1383,7 @@ async function initApp() {
         showPage('pg-clock');
         loadTodayPunches();
         window._dualMode = 'self';
-        if (isDualRole()) setupDualModeBar();
+        if (isDualRole() || isRevenueOnly()) setupDualModeBar();
       }
       toast('歡迎回來，' + currentUser.name + '！', 's');
     } else {
@@ -1435,7 +1442,8 @@ window.login = async function() {
     storeName: store ? store.name : (found.storeId ? '未知門市' : ''),
     role: found.role || 'employee',
     position: found.position || '',
-    managerAccess: found.managerAccess === true
+    managerAccess: found.managerAccess === true,
+    revenueAccess: found.revenueAccess === true
   };
   saveSession(user);
   // ⭐ 老闆登入 → 用剛輸入的密碼取得 Firebase 身分(解鎖個資);員工/主管維持匿名
@@ -1460,13 +1468,14 @@ window.login = async function() {
     showPage('pg-clock');
     loadTodayPunches();
     window._dualMode = 'self';
-    if (isDualRole()) setupDualModeBar();
+    if (isDualRole() || isRevenueOnly()) setupDualModeBar();
   }
   toast('歡迎，' + user.name + '！', 's');
 }
 
 window.logout = function() {
   if (!confirm('確定要登出嗎？')) return;
+  document.body.classList.remove('rev-only');  // ⭐ 清掉業績登打模式
   if (typeof window.bossRelock === 'function') window.bossRelock();  // ⭐ 退回匿名,鎖回個資
   clearSession();
   currentUser = null;
@@ -1501,6 +1510,8 @@ function isSuperAdmin() { return currentUser && currentUser.role === 'superadmin
 function isManager() { return currentUser && (currentUser.role === 'manager' || currentUser.role === 'superadmin' || currentUser.managerAccess === true); }
 // ⭐ 兼任主管:身分是員工、但被授予主管權限(一個帳號:打卡 + 主管功能)
 function isDualRole() { return currentUser && currentUser.managerAccess === true && currentUser.role !== 'manager' && currentUser.role !== 'superadmin'; }
+// ⭐ 業績登打權限:身分是員工(非主管/非兼任主管),但被授予「只能登打業績」的細權限
+function isRevenueOnly() { return currentUser && currentUser.revenueAccess === true && currentUser.managerAccess !== true && currentUser.role !== 'manager' && currentUser.role !== 'superadmin'; }
 
 // Superadmin selected store (null = all stores)
 let superAdminStoreFilter = null;
@@ -1563,6 +1574,7 @@ window.onSuperAdminStoreChange = function(val) {
 
 function applyUser() {
   if (!currentUser) return;
+  document.body.classList.remove('rev-only');  // ⭐ 每次套用身分先清掉業績登打模式(避免換帳號殘留)
   const n = currentUser.name, s = currentUser.storeName;
   const el = id => document.getElementById(id);
   if (el('emp-banner-name')) el('emp-banner-name').textContent = '👤 ' + n + '・' + s;
@@ -1582,9 +1594,9 @@ function applyUser() {
   // ⭐ 兼任主管:用最新員工資料重新確認權限,並顯示/隱藏切換列(避免舊登入記錄沒帶到 managerAccess)
   try {
     const me = EMPLOYEES.find(e => e.id === currentUser.id);
-    if (me) currentUser.managerAccess = (me.managerAccess === true);
+    if (me) { currentUser.managerAccess = (me.managerAccess === true); currentUser.revenueAccess = (me.revenueAccess === true); }
   } catch(e){}
-  if (isDualRole()) { setupDualModeBar(); } else if (typeof hideDualModeBar === 'function') { hideDualModeBar(); }
+  if (isDualRole() || isRevenueOnly()) { setupDualModeBar(); } else if (typeof hideDualModeBar === 'function') { hideDualModeBar(); }
 }
 
 // ── Nav ──
@@ -1681,14 +1693,18 @@ function setupDualModeBar(){
     bar = document.createElement('div');
     bar.id = 'dual-mode-bar';
     bar.style.cssText = 'flex-shrink:0;z-index:9999;background:linear-gradient(135deg,#5C2818 0%,#A0503A 50%,#D4836A 100%);padding:10px 14px 8px';
-    bar.innerHTML =
-      '<div style="display:flex;background:rgba(255,255,255,.18);border-radius:11px;padding:4px;gap:4px">' +
-      '<button id="dm-self" onclick="switchDualMode(\'self\')">🕐 我的</button>' +
-      '<button id="dm-mgr" onclick="switchDualMode(\'mgr\')">🧑‍💼 主管功能</button>' +
-      '</div>';
     var _shell = document.querySelector('.shell') || document.body;
     _shell.insertBefore(bar, _shell.firstChild);
   }
+  // ⭐ 依權限決定第二顆按鈕:業績登打 or 主管功能(每次都重設,避免換帳號殘留舊按鈕)
+  var _revBtn = isRevenueOnly()
+    ? '<button id="dm-mgr" onclick="switchDualMode(\'rev\')">📈 業績登打</button>'
+    : '<button id="dm-mgr" onclick="switchDualMode(\'mgr\')">🧑‍💼 主管功能</button>';
+  bar.innerHTML =
+    '<div style="display:flex;background:rgba(255,255,255,.18);border-radius:11px;padding:4px;gap:4px">' +
+    '<button id="dm-self" onclick="switchDualMode(\'self\')">🕐 我的</button>' +
+    _revBtn +
+    '</div>';
   bar.style.display = 'block';
   if (!window._dualMode) window._dualMode = 'self';
   applyDualModeStyle();
@@ -1700,7 +1716,7 @@ function applyDualModeStyle(){
   const base = 'flex:1;padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:800;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;transition:.15s;';
   const on = 'background:#fff;color:#7D3D2C;box-shadow:0 1px 3px rgba(0,0,0,.2)';
   const off = 'background:transparent;color:rgba(255,255,255,.9)';
-  const isMgr = (window._dualMode === 'mgr');
+  const isMgr = (window._dualMode === 'mgr' || window._dualMode === 'rev');
   const _bar = document.getElementById('dual-mode-bar');
   if (_bar) _bar.style.background = isMgr ? 'linear-gradient(135deg,#3D1A0F 0%,#7D3D2C 50%,#A0503A 100%)' : 'linear-gradient(135deg,#5C2818 0%,#A0503A 50%,#D4836A 100%)';
   self.style.cssText = base + (isMgr ? off : on);
@@ -1710,9 +1726,15 @@ window.switchDualMode = function(mode){
   window._dualMode = mode;
   applyDualModeStyle();
   if (mode === 'mgr'){
+    document.body.classList.remove('rev-only');
     buildMgrNav();
     showPage('pg-overview');
+  } else if (mode === 'rev'){
+    // ⭐ 業績登打:只顯示業績區塊(rev-only CSS 隱藏其餘),不建主管導覽、碰不到補打卡/KPI/薪資
+    document.body.classList.add('rev-only');
+    showPage('pg-overview');
   } else {
+    document.body.classList.remove('rev-only');
     buildEmpNav();
     showPage('pg-clock');
     if (typeof loadTodayPunches === 'function') loadTodayPunches();
@@ -3113,7 +3135,8 @@ window.mgrLoadMonthRevenue = async function(storeId){
         hrCost += laborCostOfAtStore(emp, md, storeId);
       }
       pctEl.textContent = (netExact > 0) ? (hrCost / netExact * 100).toFixed(2) + '%' : '—';
-      pctEl.title = '人事成本 $' + Math.round(hrCost).toLocaleString() + ' ÷ 淨營收 $' + net.toLocaleString();
+      // ⭐ 業績登打權限者:只看到占比%,不顯示人事成本實際金額(移除 tooltip)
+      pctEl.title = isRevenueOnly() ? '' : ('人事成本 $' + Math.round(hrCost).toLocaleString() + ' ÷ 淨營收 $' + net.toLocaleString());
     } catch (err){
       pctEl.textContent = '—';
     }
@@ -8902,9 +8925,27 @@ window.bossToggleManagerAccess = async function(empId, makeOn){
   const emp = EMPLOYEES.find(e => e.id === empId);
   if (!emp) return;
   emp.managerAccess = makeOn;
+  const _upd = { managerAccess: makeOn };
+  if (makeOn && emp.revenueAccess){ emp.revenueAccess = false; _upd.revenueAccess = false; }  // ⭐ 互斥:開兼任主管 → 自動關業績登打
   try {
-    await fbUpdate('employees/' + empId, { managerAccess: makeOn });
+    await fbUpdate('employees/' + empId, _upd);
     toast('✓ ' + emp.name + (makeOn ? ' 已開啟兼任主管權限' : ' 已關閉兼任主管權限'), 's');
+    bossLoadEmpList();
+  } catch(err){
+    toast('⚠️ 儲存失敗,請重試', 'e');
+  }
+};
+
+// ⭐ 業績登打權限開關(只給正職:可登打業績、看占比;不含補打卡/KPI/薪資)
+window.bossToggleRevenueAccess = async function(empId, makeOn){
+  const emp = EMPLOYEES.find(e => e.id === empId);
+  if (!emp) return;
+  emp.revenueAccess = makeOn;
+  const _upd = { revenueAccess: makeOn };
+  if (makeOn && emp.managerAccess){ emp.managerAccess = false; _upd.managerAccess = false; }  // ⭐ 互斥:開業績登打 → 自動關兼任主管
+  try {
+    await fbUpdate('employees/' + empId, _upd);
+    toast('✓ ' + emp.name + (makeOn ? ' 已開啟業績登打權限' : ' 已關閉業績登打權限'), 's');
     bossLoadEmpList();
   } catch(err){
     toast('⚠️ 儲存失敗,請重試', 'e');
@@ -9075,6 +9116,7 @@ async function bossLoadEmpList(){
   html += '<th style="padding:9px">健保級距</th>';
   html += '<th style="padding:9px">密碼</th>';
   html += '<th style="padding:9px">兼任主管</th>';
+  html += '<th style="padding:9px">業績登打<br><span style="font-weight:400;font-size:9px;color:#9CA3AF">(可授權)</span></th>';
   html += '<th style="padding:9px">狀態</th>';
   html += '<th style="padding:9px">操作</th>';
   html += '</tr></thead><tbody>';
@@ -9118,8 +9160,14 @@ async function bossLoadEmpList(){
     } else {
       html += '<td style="padding:6px;text-align:center"><div onclick="bossToggleManagerAccess(\'' + e.id + '\',' + (e.managerAccess ? 'false' : 'true') + ')" title="兼任主管權限" style="width:42px;height:24px;border-radius:20px;background:' + (e.managerAccess ? '#BE6148' : '#D1D5DB') + ';position:relative;cursor:pointer;margin:0 auto;transition:.15s"><div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:' + (e.managerAccess ? '21px' : '3px') + ';transition:.15s;box-shadow:0 1px 2px rgba(0,0,0,.3)"></div></div></td>';
     }
+    // 業績登打 開關(員工身分皆可授權:正職 / 主管階級皆可;正式主管、老闆已內含此權限故顯示 —)
+    if (e.role !== 'manager' && e.role !== 'superadmin'){
+      html += '<td style="padding:6px;text-align:center"><div onclick="bossToggleRevenueAccess(\'' + e.id + '\',' + (e.revenueAccess ? 'false' : 'true') + ')" title="業績登打權限(可登打業績、看占比;不含補打卡/KPI/薪資)" style="width:42px;height:24px;border-radius:20px;background:' + (e.revenueAccess ? '#0369a1' : '#D1D5DB') + ';position:relative;cursor:pointer;margin:0 auto;transition:.15s"><div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:' + (e.revenueAccess ? '21px' : '3px') + ';transition:.15s;box-shadow:0 1px 2px rgba(0,0,0,.3)"></div></div></td>';
+    } else {
+      html += '<td style="padding:9px;text-align:center;color:#9CA3AF;font-size:11px">—</td>';
+    }
     html += '<td style="padding:9px;text-align:center">' + statusBadge + '</td>';
-    
+
     // 操作按鈕
     let actions = '<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">';
     actions += '<button onclick="bossOpenEmpDetail(\'' + e.id + '\')" style="background:#EEF6FF;color:#1d4ed8;border:none;padding:5px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">詳細</button>';
