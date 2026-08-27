@@ -3092,12 +3092,16 @@ window.mgrLoadMonthRevenue = async function(storeId){
   const now = new Date();
   const yyyymm = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
   const storeRev = await fbGet('revenue/' + storeId) || {};
-  
+  // ⭐ 公休日一律不計入月總額(即使底層殘留金額也排除,與每日明細的公休顯示一致)
+  const _mcal = await fbGet('calendar/' + yyyymm) || {};
+  const _mHol = new Set([...(_mcal.holidays || []), ...((_mcal.storeHolidays && _mcal.storeHolidays[storeId]) || [])]);
+
   let lunchP = 0, lunchD = 0, lunchU = 0, dinnerP = 0, dinnerD = 0, dinnerU = 0;
   let daysLogged = 0;
   Object.keys(storeRev).forEach(date => {
     if (!date.startsWith(yyyymm)) return;
     const d = storeRev[date];
+    if (d.holiday || _mHol.has(date)) return;  // ⭐ 排除公休日
     daysLogged++;
     lunchP += d.lunchPickup || 0;
     lunchD += d.lunchDelivery || 0;
@@ -3301,7 +3305,17 @@ window.mgrSaveRevenue = async function(){
   if (total === 0){
     if (!confirm('所有欄位都是 0,確定要儲存嗎?')) return;
   }
-  
+
+  // ⭐ 公休日不得登打業績(週日/公休本來就沒營業;避免覆蓋公休標記、造成月總額多算)
+  const _hym = selectedDate.substr(0,7);
+  const _hcal = await fbGet('calendar/' + _hym) || {};
+  const _hGlobal = _hcal.holidays || [];
+  const _hStore = (_hcal.storeHolidays && _hcal.storeHolidays[storeId]) || [];
+  if (_hGlobal.includes(selectedDate) || _hStore.includes(selectedDate)){
+    toast('⚠️ ' + selectedDate + ' 是公休日,不能登打業績。若確定要登打,請先到該日「取消公休」再登。', 'd');
+    return;
+  }
+
   await fbSet('revenue/' + storeId + '/' + selectedDate, data);
   toast('✓ 今日業績已儲存', 's');
   mgrLoadRevenue();
@@ -7468,7 +7482,11 @@ async function bossLoadDashboard(){
   ]);
   const prefetched = {punches: allPunches, leaves: allLeaves};
   const kpiDataObj = kpiData || {};
-  
+  // ⭐ 公休日排除用
+  const _dcal = await fbGet('calendar/' + yyyymm) || {};
+  const _dGlobalHol = _dcal.holidays || [];
+  const _dStoreHol = _dcal.storeHolidays || {};
+
   // 算本月人事費用(按打卡門市分攤,跨店支援歸支援的店)
   let totalCost = 0;
   for (const ce of EMPLOYEES.filter(e => e.active !== false && e.role !== 'superadmin')){
@@ -7495,6 +7513,7 @@ async function bossLoadDashboard(){
     Object.keys(storeRev).forEach(date => {
       if (!date.startsWith(yyyymm)) return;
       const d = storeRev[date];
+      if (d.holiday || _dGlobalHol.includes(date) || (_dStoreHol[storeId]||[]).includes(date)) return;  // ⭐ 排除公休
       const pickup = (d.lunchPickup||0) + (d.dinnerPickup||0);
       const delivery = (d.lunchDelivery||0) + (d.dinnerDelivery||0);
       const uber = (d.lunchUber||0) + (d.dinnerUber||0);
@@ -7607,6 +7626,10 @@ async function bossLoadDashboard(){
 
 async function renderStoreCompareTable(prefetched, allRev, kpiDataObj){
   const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
+  // ⭐ 公休日排除用
+  const _sccal = await fbGet('calendar/' + yyyymm) || {};
+  const _scGlobalHol = _sccal.holidays || [];
+  const _scStoreHol = _sccal.storeHolidays || {};
   // ⚡ 如果沒傳入資料,自己抓 (向後相容)
   if (!prefetched){
     const [punches, leaves, rev, kpi] = await Promise.all([
@@ -7638,6 +7661,7 @@ async function renderStoreCompareTable(prefetched, allRev, kpiDataObj){
     Object.keys(storeRev).forEach(date => {
       if (!date.startsWith(yyyymm)) return;
       const d = storeRev[date];
+      if (d.holiday || _scGlobalHol.includes(date) || (_scStoreHol[store.id]||[]).includes(date)) return;  // ⭐ 排除公休
       const pickup = (d.lunchPickup||0) + (d.dinnerPickup||0);
       const delivery = (d.lunchDelivery||0) + (d.dinnerDelivery||0);
       const uber = (d.lunchUber||0) + (d.dinnerUber||0);
@@ -8216,16 +8240,21 @@ async function bossLoadRev(){
   // 抓資料
   const yyyymm = bossState.year + '-' + String(bossState.month).padStart(2,'0');
   const allRev = await fbGet('revenue') || {};
-  
+  // ⭐ 公休日一律排除(連每日明細也不顯示;避免公休日底層殘留金額被計入)
+  const _bcal = await fbGet('calendar/' + yyyymm) || {};
+  const _bGlobalHol = _bcal.holidays || [];
+  const _bStoreHol = _bcal.storeHolidays || {};
+
   let totalRev = 0, totalUber = 0;
   const dailyData = {};  // date → {pickup, delivery, uber}
-  
+
   Object.keys(allRev).forEach(storeId => {
     if (bossState.storeId !== 'all' && storeId !== bossState.storeId) return;
     const storeRev = allRev[storeId] || {};
     Object.keys(storeRev).forEach(date => {
       if (!date.startsWith(yyyymm)) return;
       const d = storeRev[date];
+      if (d.holiday || _bGlobalHol.includes(date) || (_bStoreHol[storeId]||[]).includes(date)) return;  // ⭐ 排除公休
       const lunchP = d.lunchPickup||0, lunchD = d.lunchDelivery||0, lunchU = d.lunchUber||0;
       const dinnerP = d.dinnerPickup||0, dinnerD = d.dinnerDelivery||0, dinnerU = d.dinnerUber||0;
       totalRev += lunchP + lunchD + lunchU + dinnerP + dinnerD + dinnerU;
