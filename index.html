@@ -1238,14 +1238,32 @@ const LEAVE_TYPES = [
 ];
 
 // ── Firebase Helpers ──
-async function fbGet(path) {
-  const snap = await get(ref(db, path));
-  return snap.exists() ? snap.val() : null;
+// ⭐ 流量優化：只對「整張大表」的讀取做短效快取（單筆讀取不快取）
+//    任何寫入都會立即清掉對應快取 → 打卡完馬上就是最新資料
+var _bigCache = {};
+var _BIG_TTL = 45000;                              // 45 秒
+var _BIG = { punches:1, leaves:1, revenue:1 };     // 只有這三張「整表」才快取
+function _bigKey(path){ return (path && _BIG[path] === 1) ? path : null; }
+function _bigDrop(path){
+  if (!path) { _bigCache = {}; return; }            // 多路徑批次更新 → 全清
+  var root = String(path).split('/')[0];
+  if (_BIG[root] === 1) delete _bigCache[root];
 }
-async function fbSet(path, data) { await set(ref(db, path), data); }
-async function fbPush(path, data) { const r = await push(ref(db, path), data); return r.key; }
-async function fbUpdate(path, data) { await update(path ? ref(db, path) : ref(db), data); }
-async function fbRemove(path) { await remove(ref(db, path)); }
+async function fbGet(path) {
+  const ck = _bigKey(path);
+  if (ck) {
+    const c = _bigCache[ck];
+    if (c && (Date.now() - c.t) < _BIG_TTL) return c.v;
+  }
+  const snap = await get(ref(db, path));
+  const val = snap.exists() ? snap.val() : null;
+  if (ck) _bigCache[ck] = { t: Date.now(), v: val };
+  return val;
+}
+async function fbSet(path, data) { _bigDrop(path); await set(ref(db, path), data); _bigDrop(path); }
+async function fbPush(path, data) { _bigDrop(path); const r = await push(ref(db, path), data); _bigDrop(path); return r.key; }
+async function fbUpdate(path, data) { _bigDrop(path); await update(path ? ref(db, path) : ref(db), data); _bigDrop(path); }
+async function fbRemove(path) { _bigDrop(path); await remove(ref(db, path)); _bigDrop(path); }
 
 // 只抓某員工的資料(下載量最佳化)
 async function fbQueryByEmp(path, empId) {
@@ -6725,14 +6743,20 @@ function setupRealtimeListeners() {
     }
   });
 
-  onValue(ref(db, 'punches'), snap => {
-    // Update today records if on clock page
+  // ⭐ 流量優化：原本監聽「整張打卡表」→ 任何人打卡都會把全部歷史推送給所有人（流量爆掉的主因）
+  //    改成只監聽「今天」的打卡。打卡即時更新的效果完全一樣，但推送量只剩當天資料。
+  //    ※ 需在 Firebase 規則的 punches 加上 ".indexOn": ["date","empId"]，過濾才會在伺服器端生效
+  var _todayQ = query(ref(db, 'punches'), orderByChild('date'), equalTo(getTodayTW()));
+  var _mgrT = null;
+  function _mgrRefresh(fn){ clearTimeout(_mgrT); _mgrT = setTimeout(fn, 2500); }  // 連續打卡時合併重畫，避免連鎖重抓
+  onValue(_todayQ, snap => {
+    // 員工在打卡頁 → 立即更新（不延遲，打卡體驗不變）
     if (document.getElementById('pg-clock').classList.contains('active') && currentUser) {
       const today = getTodayTW();
-      const allPunches = snap.val();
-      if (allPunches) {
+      const todayPunches = snap.val();
+      if (todayPunches) {
         punchState = {IN1:null,OUT1:null,IN2:null,OUT2:null};
-        Object.values(allPunches).forEach(p => {
+        Object.values(todayPunches).forEach(p => {
           if (p.empId === currentUser.id && p.date === today) punchState[p.type] = p.calcTime;
         });
         updatePunchBtns();
@@ -6740,30 +6764,41 @@ function setupRealtimeListeners() {
         loadEmpMonthStats();
       }
     }
-    // Update overview if manager is on overview page
+    // 主管頁面 → 合併 2.5 秒內的多次變動，只重畫一次
     if (document.getElementById('pg-overview').classList.contains('active') && currentUser && isManager()) {
-      renderOverview();
+      _mgrRefresh(renderOverview);
     }
-    // Update month stats if manager is on month page
     if (document.getElementById('pg-month').classList.contains('active') && currentUser && isManager()) {
-      renderMonthTable();
+      _mgrRefresh(renderMonthTable);
     }
   });
 
   // 監聽 reviews(遲到紀錄)變化 → 員工/主管頁面自動同步
   // 這個監聽器是為了修正「主管按完成確認後,員工的月統計頁不會自動更新」的問題
-  onValue(ref(db, 'reviews'), snap => {
+  // ⭐ 流量優化:原本監聽整張 reviews 表(每次開頁面就下載全部歷史)。
+  //    這個監聽器只是用來「觸發重畫」,根本沒用到 snap 內容 → 縮小成「本月」即可,行為一樣。
+  var _rvM = (function(){
+    var t  = getTodayTW();                                   // YYYY-MM-DD
+    var ym = t.slice(0,7);
+    var y  = parseInt(t.slice(0,4),10), m = parseInt(t.slice(5,7),10);
+    var last = new Date(Date.UTC(y, m, 0)).getUTCDate();      // 該月最後一天
+    return { s: ym + '-01', e: ym + '-' + String(last).padStart(2,'0') };
+  })();
+  var _rvQ = query(ref(db, 'reviews'), orderByChild('date'), startAt(_rvM.s), endAt(_rvM.e));
+  var _rvT = null;
+  function _rvRefresh(fn){ clearTimeout(_rvT); _rvT = setTimeout(fn, 2000); }
+  onValue(_rvQ, snap => {
     // 員工開著「我的月統計」時,自動重新載入
     if (document.getElementById('pg-mymonth').classList.contains('active') && currentUser) {
-      loadMyMonth();
+      _rvRefresh(loadMyMonth);
     }
     // 主管開著總覽 → 重新算異常人數
     if (document.getElementById('pg-overview').classList.contains('active') && currentUser && isManager()) {
-      renderOverview();
+      _rvRefresh(renderOverview);
     }
     // 主管開著月統計 → 重算遲到次數
     if (document.getElementById('pg-month').classList.contains('active') && currentUser && isManager()) {
-      renderMonthTable();
+      _rvRefresh(renderMonthTable);
     }
   });
 }
