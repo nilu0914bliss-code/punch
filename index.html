@@ -845,7 +845,6 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
   <button class="action-btn success" onclick="submitPatch()">✅ 確認補卡登記</button>
   <div class="sec" style="margin-top:4px"><div class="sec-title">刪除員工打卡紀錄</div></div>
   <div style="padding:0 14px 8px">
-    <div style="font-size:12px;color:var(--g4);margin-bottom:8px">選擇員工查看今日打卡，可刪除誤打的紀錄</div>
     <select class="form-select" id="delete-punch-emp" onchange="loadTodayPunchesForDelete()">
       <option value="">選擇員工</option>
     </select>
@@ -1244,10 +1243,13 @@ var _bigCache = {};
 var _BIG_TTL = 45000;                              // 45 秒
 var _BIG = { punches:1, leaves:1, revenue:1 };     // 只有這三張「整表」才快取
 function _bigKey(path){ return (path && _BIG[path] === 1) ? path : null; }
+var _qCache = {};                                  // 針對「單一員工/單一天」查詢的短效快取
+var _Q_TTL  = 30000;                               // 30 秒
 function _bigDrop(path){
-  if (!path) { _bigCache = {}; return; }            // 多路徑批次更新 → 全清
+  if (!path) { _bigCache = {}; _qCache = {}; return; }   // 多路徑批次更新 → 全清
   var root = String(path).split('/')[0];
   if (_BIG[root] === 1) delete _bigCache[root];
+  for (var k in _qCache) { if (k.indexOf(root + '|') === 0) delete _qCache[k]; }
 }
 async function fbGet(path) {
   const ck = _bigKey(path);
@@ -1268,17 +1270,28 @@ async function fbRemove(path) { _bigDrop(path); await remove(ref(db, path)); _bi
 // 只抓某員工的資料(下載量最佳化)
 async function fbQueryByEmp(path, empId) {
   if (!empId) return null;
+  // ⭐ 流量優化:同一個人的資料在同一次頁面渲染中常被連抓 2~3 次,加 30 秒快取
+  const ck = path + '|emp|' + empId;
+  const c = _qCache[ck];
+  if (c && (Date.now() - c.t) < _Q_TTL) return c.v;
   const q = query(ref(db, path), orderByChild('empId'), equalTo(empId));
   const snap = await get(q);
-  return snap.exists() ? snap.val() : null;
+  const val = snap.exists() ? snap.val() : null;
+  _qCache[ck] = { t: Date.now(), v: val };
+  return val;
 }
 
 // 只抓某日的資料
 async function fbQueryByDate(path, date) {
   if (!date) return null;
+  const ck = path + '|date|' + date;
+  const c = _qCache[ck];
+  if (c && (Date.now() - c.t) < _Q_TTL) return c.v;
   const q = query(ref(db, path), orderByChild('date'), equalTo(date));
   const snap = await get(q);
-  return snap.exists() ? snap.val() : null;
+  const val = snap.exists() ? snap.val() : null;
+  _qCache[ck] = { t: Date.now(), v: val };
+  return val;
 }
 
 // 只抓日期範圍內的資料(用於某月)
@@ -5721,15 +5734,35 @@ window.openPatchPanel = async function() {
   document.getElementById('patch-date').value = getTodayTW();
   await reloadPatchEmpList();
 
-  // 刪除員工打卡的下拉(只列本店員工,維持原邏輯)
-  const myEmps = EMPLOYEES.filter(e=>e.active!==false&&e.role==='employee'&&(!myStoreId||e.storeId===myStoreId));
+  // ⭐ 刪除員工打卡的下拉:本店在前,其他門市分組列在後
+  //    原本只列 role==='employee' 且本店的人 → 主管、以及來本店支援卻打錯卡的他店夥伴都選不到,刪不掉
   const delSel=document.getElementById('delete-punch-emp');
   if(delSel){
-    delSel.innerHTML='<option value="">選擇員工</option>';
-    myEmps.forEach(e=>{
+    const _mk=function(e){
       const opt=document.createElement('option');
-      opt.value=e.id; opt.textContent=e.name+'('+e.code+')';
-      delSel.appendChild(opt);
+      opt.value=e.id;
+      opt.textContent=e.name+'('+e.code+')'+(e.role==='manager'?'・主管':'');
+      return opt;
+    };
+    const _all = EMPLOYEES.filter(e=>e.active!==false && e.role!=='superadmin');
+    const _mine = _all.filter(e=>e.storeId===myStoreId);
+    const _others = _all.filter(e=>e.storeId!==myStoreId);
+
+    delSel.innerHTML='<option value="">選擇員工</option>';
+
+    const og1=document.createElement('optgroup');
+    og1.label='── 本店 ──';
+    _mine.forEach(function(e){ og1.appendChild(_mk(e)); });
+    if(_mine.length) delSel.appendChild(og1);
+
+    // 依門市分組,方便找「來支援時打錯卡」的他店夥伴
+    const _byStore={};
+    _others.forEach(function(e){ (_byStore[e.storeId]=_byStore[e.storeId]||[]).push(e); });
+    Object.keys(_byStore).forEach(function(sid){
+      const og=document.createElement('optgroup');
+      og.label='── '+(((STORES.find(function(x){return x.id===sid;})||{}).name)||'其他門市')+' ──';
+      _byStore[sid].forEach(function(e){ og.appendChild(_mk(e)); });
+      delSel.appendChild(og);
     });
   }
 
@@ -5882,18 +5915,30 @@ window.loadTodayPunchesForDelete = async function() {
   if (!empId) { c.innerHTML='<div style="text-align:center;color:var(--g4);padding:14px;font-size:13px">請先選擇員工</div>'; return; }
 
   c.innerHTML='<div style="text-align:center;color:var(--g4);padding:14px;font-size:13px">載入中…</div>';
-  const today = getTodayTW();
-  // 只抓那位員工的打卡
+  // 只抓那位員工的打卡(所有日期,不限當天 —— 有時候不是當天才發現打錯)
   const allPunches = await fbQueryByEmp('punches', empId);
   if (!allPunches) { c.innerHTML='<div style="text-align:center;color:var(--g4);padding:14px;font-size:13px">無打卡紀錄</div>'; return; }
 
-  const punches = Object.entries(allPunches)
+  const _ORDER={IN1:1,OUT1:2,IN2:3,OUT2:4};
+  const _allList = Object.entries(allPunches)
     .map(([k,v])=>({...v,key:k}))
-    .sort((a,b)=>(a.date>b.date?-1:1));
+    .sort((a,b)=>{
+      if (a.date!==b.date) return a.date>b.date?-1:1;          // 日期新到舊
+      return (_ORDER[a.type]||9)-(_ORDER[b.type]||9);           // 同一天照時段排
+    });
 
-  if (!punches.length) { c.innerHTML='<div style="text-align:center;color:var(--g4);padding:14px;font-size:13px">無打卡紀錄</div>'; return; }
+  if (!_allList.length) { c.innerHTML='<div style="text-align:center;color:var(--g4);padding:14px;font-size:13px">無打卡紀錄</div>'; return; }
+
+  const _LIMIT = 60;                                            // 只顯示最近 60 筆,避免整年紀錄爆版
+  const punches = _allList.slice(0, _LIMIT);
 
   c.innerHTML='';
+  if (_allList.length > _LIMIT) {
+    const hint=document.createElement('div');
+    hint.style.cssText='font-size:12px;color:var(--g4);margin-bottom:8px';
+    hint.textContent='顯示最近 '+_LIMIT+' 筆（共 '+_allList.length+' 筆）';
+    c.appendChild(hint);
+  }
   punches.forEach(p=>{
     const typeLabels={IN1:'第一段上班',OUT1:'第一段下班',IN2:'第二段上班',OUT2:'第二段下班'};
     const div=document.createElement('div');
@@ -5902,6 +5947,7 @@ window.loadTodayPunchesForDelete = async function() {
       '<div style="flex:1">'+
         '<div style="font-size:13px;font-weight:800;color:var(--g9)">'+p.date+' '+(typeLabels[p.type]||p.type)+'</div>'+
         '<div style="font-size:12px;color:var(--g5);margin-top:2px">計算時間：'+p.calcTime+'・原始：'+p.rawTime+(p.isPatch?' ⚠️ 補卡':'')+'</div>'+
+        '<div style="font-size:11.5px;color:var(--g4);margin-top:1px">打卡門市：'+(((STORES.find(function(x){return x.id===p.storeId;})||{}).name)||'—')+'</div>'+
       '</div>';
     const delBtn=document.createElement('button');
     delBtn.style.cssText='background:var(--dl);color:var(--d);border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0';
