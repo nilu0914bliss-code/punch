@@ -365,7 +365,11 @@ body{font-family:'Inter','Noto Sans TC',-apple-system,BlinkMacSystemFont,'PingFa
   </div>
   <div class="form-group" style="padding-top:10px">
     <div class="form-label">請假日期</div>
-    <input type="date" class="form-input" id="leave-date">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><div style="font-size:12px;color:var(--g6);margin-bottom:4px">開始日</div><input type="date" class="form-input" id="leave-date" onchange="syncLeaveEndMin()"></div>
+      <div><div style="font-size:12px;color:var(--g6);margin-bottom:4px">結束日</div><input type="date" class="form-input" id="leave-date-end"></div>
+    </div>
+    <div style="font-size:11px;color:var(--g5);margin-top:6px">只請一天 → 結束日留空即可。要連續請多天（例如產假）直接把結束日選到最後一天。</div>
   </div>
   <div style="margin:0 14px 10px;background:var(--sl);border:1.5px solid #bbf7d0;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="toggleLeaveAllDay()">
     <div style="flex:1">
@@ -2319,6 +2323,7 @@ async function loadEmpMonthStats() {
 // ── Leave ──
 window.initLeavePage = function() {
   document.getElementById('leave-date').value = getTodayTW();
+  var _leInit = document.getElementById('leave-date-end'); if (_leInit) _leInit.value = '';
   // Reset all-day toggle
   leaveAllDay = true;
   const sw = document.getElementById('leave-allday-sw');
@@ -2404,6 +2409,14 @@ window.calcLeaveHours = function() {
   const diff = (eh*60+em) - (sh*60+sm);
   disp.textContent = diff > 0 ? (diff/60).toFixed(1) + ' 小時' : '0 小時';
 }
+
+window.syncLeaveEndMin = function(){
+  var sEl = document.getElementById('leave-date');
+  var eEl = document.getElementById('leave-date-end');
+  if (!sEl || !eEl) return;
+  eEl.min = sEl.value || '';
+  if (eEl.value && eEl.value < sEl.value) eEl.value = sEl.value;
+};
 
 window.handleLeaveFile = function(input) {
   const file = input.files[0];
@@ -2586,6 +2599,20 @@ window.showAnnualHistoryEmp = async function() {
   await showAnnualHistory(currentUser.id, currentUser.name, emp ? emp.hireDate : '');
 }
 
+function _leaveDateList(s, e){
+  var out = [];
+  if (!s) return out;
+  if (!e || e < s) e = s;
+  var y=+s.slice(0,4), m=+s.slice(5,7), d=+s.slice(8,10);
+  var ey=+e.slice(0,4), em=+e.slice(5,7), ed=+e.slice(8,10);
+  var cur = Date.UTC(y, m-1, d), end = Date.UTC(ey, em-1, ed), guard = 0;
+  while (cur <= end && guard < 400){
+    var dt = new Date(cur);
+    out.push(dt.getUTCFullYear() + '-' + String(dt.getUTCMonth()+1).padStart(2,'0') + '-' + String(dt.getUTCDate()).padStart(2,'0'));
+    cur += 86400000; guard++;
+  }
+  return out;
+}
 window.submitLeave = async function() {
   if (!selectedLeaveType) { toast('⚠️ 請先選擇假別', 'd'); return; }
   const t = LEAVE_TYPES.find(x => x.id === selectedLeaveType);
@@ -2610,7 +2637,13 @@ window.submitLeave = async function() {
     const remain = await checkAnnualLeaveRemain();
     if (remain <= 0) { toast('⚠️ 本週年度特休已用完，無法申請', 'd'); return; }
   }
-  const date = document.getElementById('leave-date').value;
+  const startDate = document.getElementById('leave-date').value;
+  let endDate = (document.getElementById('leave-date-end')||{}).value || startDate;
+  if (!startDate) { toast('⚠️ 請選擇開始日', 'd'); return; }
+  if (endDate < startDate) { toast('⚠️ 結束日不能早於開始日', 'd'); return; }
+  const dateList = _leaveDateList(startDate, endDate);
+  if (!dateList.length) { toast('⚠️ 日期有誤', 'd'); return; }
+  if (dateList.length > 92) { toast('⚠️ 單筆請假不能超過 92 天；更長的假（如育嬰留停）請洽主管另行處理', 'd'); return; }
   let start, end, hours;
   if (leaveAllDay) {
     start = '00:00'; end = '00:00'; hours = 8;
@@ -2622,25 +2655,32 @@ window.submitLeave = async function() {
     if (hours <= 0) { toast('⚠️ 時間設定有誤', 'd'); return; }
   }
   const reason = document.getElementById('leave-reason').value || '';
-  await fbPush('leaves', {
-    empId: currentUser.id, empName: currentUser.name,
-    type: selectedLeaveType, date, start, end,
-    hours: parseFloat(hours.toFixed(1)), reason,
-    hasDoc: !!leaveFileBase64,
-    docFile: leaveFileBase64 || null,
-    docName: leaveFileName || null,
-    status: 'pending',
-    reviewNote: '', reviewBy: '', reviewAt: '',
-    createdAt: Date.now()
-  });
+  const isRange = dateList.length > 1;
+  const rangeId = isRange ? ('r' + Date.now()) : null;
+  const hoursR = parseFloat(hours.toFixed(1));
+  for (let i = 0; i < dateList.length; i++) {
+    await fbPush('leaves', {
+      empId: currentUser.id, empName: currentUser.name,
+      type: selectedLeaveType, date: dateList[i], start, end,
+      hours: hoursR, reason,
+      hasDoc: !!leaveFileBase64,
+      docFile: (i === 0 ? (leaveFileBase64 || null) : null),
+      docName: (i === 0 ? (leaveFileName || null) : null),
+      status: 'pending',
+      reviewNote: '', reviewBy: '', reviewAt: '',
+      rangeId: rangeId, rangeStart: startDate, rangeEnd: endDate, rangeDays: dateList.length,
+      createdAt: Date.now()
+    });
+  }
   selectedLeaveType = null; leaveFileBase64 = null; leaveFileName = null;
   document.getElementById('leave-type-notice').style.display = 'none';
   document.getElementById('leave-doc-section').style.display = 'none';
   document.getElementById('leave-reason').value = '';
+  var _le2 = document.getElementById('leave-date-end'); if (_le2) _le2.value = '';
   renderLeaveTypeGrid();
   loadMyLeaves();
   updateLeaveBadge();
-  toast('✅ ' + (t?t.name:'') + '申請已送出', 's');
+  toast('✅ ' + (t?t.name:'') + '申請已送出' + (isRange ? ('（' + dateList.length + ' 天）') : ''), 's');
 }
 
 async function loadMyLeaves() {
@@ -2649,19 +2689,29 @@ async function loadMyLeaves() {
   // 只抓自己的請假紀錄
   const allLeaves = await fbQueryByEmp('leaves', currentUser.id);
   if (!allLeaves) { c.innerHTML = '<div style="text-align:center;color:var(--g4);padding:16px;font-size:13px">尚無請假紀錄</div>'; return; }
-  const myLeaves = Object.entries(allLeaves)
-    .map(([k,v]) => ({...v, key:k}))
-    .sort((a,b) => b.createdAt - a.createdAt)
-    .slice(0,10);
-  if (!myLeaves.length) { c.innerHTML = '<div style="text-align:center;color:var(--g4);padding:16px;font-size:13px">尚無請假紀錄</div>'; return; }
+  const _recs = Object.entries(allLeaves).map(([k,v]) => ({...v, key:k}));
+  const _gm = {}, _go = [];
+  _recs.forEach(l => { const gk = l.rangeId || l.key; if(!_gm[gk]){ _gm[gk]=[]; _go.push(gk); } _gm[gk].push(l); });
+  let _groups = _go.map(gk => {
+    const items = _gm[gk].slice().sort((a,b)=> (a.date<b.date?-1:1));
+    const rep = items[0];
+    return { rep, days: items.length, totalHours: items.reduce((s,x)=>s+(x.hours||0),0),
+             rangeStart: rep.rangeStart||rep.date, rangeEnd: rep.rangeEnd||items[items.length-1].date, createdAt: rep.createdAt||0 };
+  });
+  _groups.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+  _groups = _groups.slice(0,10);
+  if (!_groups.length) { c.innerHTML = '<div style="text-align:center;color:var(--g4);padding:16px;font-size:13px">尚無請假紀錄</div>'; return; }
   c.innerHTML = '';
   const stMap = {pending:{label:'待審核',cls:'pending'},approved:{label:'已核准',cls:'approved'},rejected:{label:'已駁回',cls:'rejected'}};
-  myLeaves.forEach(l => {
+  _groups.forEach(g => {
+    const l = g.rep;
     const t = LEAVE_TYPES.find(x => x.id === l.type);
     const st = stMap[l.status] || stMap.pending;
+    const multi = g.days > 1;
+    const dateLine = multi ? (g.rangeStart + ' ～ ' + g.rangeEnd + '・共 ' + g.days + ' 天・<b>' + parseFloat(g.totalHours.toFixed(1)) + '小時</b>') : (l.date + '・' + l.start + '～' + l.end + '・<b>' + l.hours + '小時</b>');
     const div = document.createElement('div');
     div.style.cssText = 'border:1px solid var(--g2);border-radius:10px;padding:12px 13px;margin-bottom:8px;background:#fff';
-    div.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px"><div style="font-size:14px;font-weight:800">' + (t?t.icon+' '+t.name:l.type) + '</div><span class="tag ' + st.cls + '">' + st.label + '</span></div><div style="font-size:12px;color:var(--g5)">' + l.date + '・' + l.start + '～' + l.end + '・<b>' + l.hours + '小時</b></div>' + (l.reason ? '<div style="font-size:12px;color:var(--g4);margin-top:2px">' + l.reason + '</div>' : '') + (l.status==='rejected'&&l.reviewNote ? '<div style="font-size:12px;color:var(--d);margin-top:4px">駁回：' + l.reviewNote + '</div>' : '');
+    div.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px"><div style="font-size:14px;font-weight:800">' + (t?t.icon+' '+t.name:l.type) + '</div><span class="tag ' + st.cls + '">' + st.label + '</span></div><div style="font-size:12px;color:var(--g5)">' + dateLine + '</div>' + (l.reason ? '<div style="font-size:12px;color:var(--g4);margin-top:2px">' + l.reason + '</div>' : '') + (l.status==='rejected'&&l.reviewNote ? '<div style="font-size:12px;color:var(--d);margin-top:4px">駁回：' + l.reviewNote + '</div>' : '');
     c.appendChild(div);
   });
 }
@@ -3958,6 +4008,23 @@ window.mgrSaveKpi = async function(){
   mgrLoadKpiList();
 };
 
+// ⭐ 外送津貼:填完即時單獨儲存(用 merge update,不影響其他 KPI 欄位,也不受 KPI 未評完擋下)
+window.mgrSaveDeliveryBonus = async function(){
+  if (!mgrKpiEmpId) return;
+  var el = document.getElementById('mgr-kpi-delivery');
+  if (!el) return;
+  var val = parseInt(el.value) || 0;
+  var yyyymm = mgrGetKpiYm();
+  try {
+    await fbUpdate('kpi/' + yyyymm + '/' + mgrKpiEmpId, { deliveryBonus: val });
+    el.style.borderColor = '#16a34a';
+    setTimeout(function(){ el.style.borderColor = '#D1D5DB'; }, 1200);
+    toast('✅ 外送津貼已儲存 $' + val.toLocaleString(), 's');
+  } catch(e) {
+    toast('⚠️ 外送津貼儲存失敗，請重試', 'd');
+  }
+};
+
 // ════════════════════════════════════════════════════════
 // ⭐ 員工端:薪資條
 // ════════════════════════════════════════════════════════
@@ -4419,44 +4486,60 @@ async function renderLeaveReview() {
   const myEmpIds = EMPLOYEES.filter(e => !myStoreId || e.storeId === myStoreId).map(e => e.id);
   let list = allLeaves ? Object.entries(allLeaves).map(([k,v]) => ({...v, key:k})).filter(l => myEmpIds.includes(l.empId)) : [];
   list = leaveTab === 'pending' ? list.filter(l => l.status === 'pending') : list.filter(l => l.status !== 'pending');
-  list.sort((a,b) => b.createdAt - a.createdAt);
+  // ⭐ 區間假單:同一個 rangeId 的逐日紀錄合併成一張卡,核准/駁回/刪除都一次處理全部
+  const gmap = {}, gorder = [];
+  list.forEach(l => { const gk = l.rangeId || l.key; if(!gmap[gk]){ gmap[gk]=[]; gorder.push(gk); } gmap[gk].push(l); });
+  let groups = gorder.map(gk => {
+    const items = gmap[gk].slice().sort((a,b)=> (a.date<b.date?-1:1));
+    const rep = items[0];
+    return { items, rep, keys: items.map(x=>x.key), totalHours: items.reduce((s,x)=>s+(x.hours||0),0),
+             days: items.length, docItem: items.find(x=>x.docFile) || rep };
+  });
+  groups.sort((a,b)=> (b.rep.createdAt||0) - (a.rep.createdAt||0));
   c.innerHTML = '';
-  if (!list.length) {
+  if (!groups.length) {
     c.innerHTML = '<div style="text-align:center;color:var(--g4);padding:28px;font-size:14px">' + (leaveTab==='pending'?'🎉 目前無待審核假單':'尚無已處理紀錄') + '</div>';
     return;
   }
   const stMap = {pending:{label:'待審核',cls:'pending'},approved:{label:'已核准',cls:'approved'},rejected:{label:'已駁回',cls:'rejected'}};
-  list.forEach(l => {
+  groups.forEach(g => {
+    const l = g.rep;
     const t = LEAVE_TYPES.find(x => x.id === l.type);
     const st = stMap[l.status] || stMap.pending;
+    const multi = g.days > 1;
+    const dateLine = multi
+      ? ((l.rangeStart||l.date) + ' ～ ' + (l.rangeEnd||g.items[g.items.length-1].date) + '・共 ' + g.days + ' 天・<b>' + parseFloat(g.totalHours.toFixed(1)) + '小時</b>')
+      : (l.date + '・' + l.start + '～' + l.end + '・<b>' + l.hours + '小時</b>');
+    const doc = g.docItem;
     const div = document.createElement('div');
     div.className = 'leave-card' + (l.status==='pending'?' pending':'');
-    div.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><div style="font-size:15px;font-weight:800">' + l.empName + ' <span style="font-size:13px;color:var(--g5)">' + (t?t.icon+' '+t.name:l.type) + '</span></div><div style="font-size:12px;color:var(--g5);margin-top:2px">' + l.date + '・' + l.start + '～' + l.end + '・<b>' + l.hours + '小時</b></div>' + (l.reason?'<div style="font-size:12px;color:var(--g4);margin-top:2px">'+l.reason+'</div>':'') + '</div><span class="tag ' + st.cls + '">' + st.label + '</span></div>' + (l.docFile && l.docFile.startsWith('data:image') ? '<div style="margin-top:8px"><div style="font-size:11px;color:var(--g4);margin-bottom:4px">附件證明：</div><img src="' + l.docFile + '" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--g2);cursor:pointer;display:block" onclick="this.style.maxHeight=this.style.maxHeight===\'none\'?\'180px\':\'none\'"></div>' : l.docFile ? '<div style="margin-top:8px"><a href="' + l.docFile + '" download="附件" style="color:var(--p);font-size:13px;font-weight:700">下載附件</a></div>' : l.hasDoc ? '<div style="margin-top:6px;font-size:11px;color:var(--w)">此假別需附證明（員工尚未上傳）</div>' : '');
+    div.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><div style="font-size:15px;font-weight:800">' + l.empName + ' <span style="font-size:13px;color:var(--g5)">' + (t?t.icon+' '+t.name:l.type) + '</span></div><div style="font-size:12px;color:var(--g5);margin-top:2px">' + dateLine + '</div>' + (l.reason?'<div style="font-size:12px;color:var(--g4);margin-top:2px">'+l.reason+'</div>':'') + '</div><span class="tag ' + st.cls + '">' + st.label + '</span></div>' + (doc.docFile && doc.docFile.startsWith('data:image') ? '<div style="margin-top:8px"><div style="font-size:11px;color:var(--g4);margin-bottom:4px">附件證明：</div><img src="' + doc.docFile + '" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--g2);cursor:pointer;display:block" onclick="this.style.maxHeight=this.style.maxHeight===\'none\'?\'180px\':\'none\'"></div>' : doc.docFile ? '<div style="margin-top:8px"><a href="' + doc.docFile + '" download="附件" style="color:var(--p);font-size:13px;font-weight:700">下載附件</a></div>' : l.hasDoc ? '<div style="margin-top:6px;font-size:11px;color:var(--w)">此假別需附證明（員工尚未上傳）</div>' : '');
     if (l.status === 'pending') {
       const rejectBox = document.createElement('div');
-      rejectBox.id = 'rb-' + l.key; rejectBox.style.display = 'none'; rejectBox.style.marginBottom = '8px';
-      rejectBox.innerHTML = '<input class="form-input" id="rr-' + l.key + '" placeholder="請填寫駁回原因（必填）" style="font-size:13px;padding:9px 12px;border-color:var(--d)">';
+      rejectBox.id = 'rb-' + g.rep.key; rejectBox.style.display = 'none'; rejectBox.style.marginBottom = '8px';
+      rejectBox.innerHTML = '<input class="form-input" id="rr-' + g.rep.key + '" placeholder="請填寫駁回原因（必填）" style="font-size:13px;padding:9px 12px;border-color:var(--d)">';
       div.appendChild(rejectBox);
       const btns = document.createElement('div');
       btns.style.cssText = 'display:flex;gap:8px';
       const approveBtn = document.createElement('button');
       approveBtn.style.cssText = 'flex:1;padding:10px;background:var(--s);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer';
-      approveBtn.textContent = '✅ 核准';
-      approveBtn.onclick = () => doReview(l.key, 'approved');
+      approveBtn.textContent = multi ? ('✅ 核准全部 ' + g.days + ' 天') : '✅ 核准';
+      approveBtn.onclick = (function(keys){ return function(){ doReviewKeys(keys, 'approved'); }; })(g.keys);
       const rejectBtn = document.createElement('button');
       rejectBtn.style.cssText = 'flex:1;padding:10px;background:var(--dl);color:var(--d);border:1px solid var(--d);border-radius:9px;font-size:13px;font-weight:800;cursor:pointer';
       rejectBtn.textContent = '❌ 駁回';
-      rejectBtn.onclick = () => {
-        const rb = document.getElementById('rb-' + l.key);
+      rejectBtn.onclick = (function(keys, repKey){ return function() {
+        const rb = document.getElementById('rb-' + repKey);
         rb.style.display = rb.style.display === 'none' ? 'block' : 'none';
-        if (rb.style.display === 'block') {
+        if (rb.style.display === 'block' && !rb.dataset.done) {
+          rb.dataset.done = '1';
           const confirmBtn = document.createElement('button');
           confirmBtn.style.cssText = 'width:100%;padding:10px;background:var(--d);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;margin-top:6px';
           confirmBtn.textContent = '確認駁回';
-          confirmBtn.onclick = () => doReview(l.key, 'rejected');
+          confirmBtn.onclick = function(){ doReviewKeys(keys, 'rejected', repKey); };
           rb.appendChild(confirmBtn);
         }
-      };
+      }; })(g.keys, g.rep.key);
       btns.appendChild(approveBtn); btns.appendChild(rejectBtn);
       div.appendChild(btns);
     } else {
@@ -4464,27 +4547,25 @@ async function renderLeaveReview() {
       meta.style.cssText = 'font-size:12px;color:var(--g4);margin-top:4px';
       meta.textContent = (l.reviewBy?'由 '+l.reviewBy+' 處理':'') + (l.reviewNote?'・駁回：'+l.reviewNote:'');
       div.appendChild(meta);
-      // Delete button for reviewed leaves
       const delRow = document.createElement('div');
       delRow.style.cssText = 'margin-top:8px;text-align:right';
       const delBtn = document.createElement('button');
       delBtn.style.cssText = 'padding:6px 14px;background:var(--dl);color:var(--d);border:1px solid var(--d);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer';
-      delBtn.textContent = '🗑 刪除假單';
-      delBtn.onclick = (function(key, type, hours, empId) {
+      delBtn.textContent = multi ? ('🗑 刪除假單（' + g.days + '天）') : '🗑 刪除假單';
+      delBtn.onclick = (function(keys, type) {
         return function() {
           const typeName = (LEAVE_TYPES.find(t=>t.id===type)||{name:type}).name;
           if (confirm('確定要刪除這筆 ' + typeName + ' 假單？\n\n此操作無法復原，相關統計將自動更新。')) {
-            deleteLeaveRecord(key, type, hours, empId);
+            deleteLeaveGroup(keys);
           }
         };
-      })(l.key, l.type, l.hours||0, l.empId);
+      })(g.keys, l.type);
       delRow.appendChild(delBtn);
       div.appendChild(delRow);
     }
     c.appendChild(div);
   });
 }
-
 window.deleteLeaveRecord = async function(key, type, hours, empId) {
   await fbRemove('leaves/' + key);
   toast('✅ 假單已刪除，統計已更新', 's');
@@ -4492,6 +4573,43 @@ window.deleteLeaveRecord = async function(key, type, hours, empId) {
   // Refresh month table if open
   if (document.getElementById('pg-month').classList.contains('active')) renderMonthTable();
   if (document.getElementById('pg-overview').classList.contains('active')) renderOverview();
+}
+
+// ⭐ 區間假單:一次刪除整組逐日紀錄
+window.deleteLeaveGroup = async function(keys) {
+  if (!keys || !keys.length) return;
+  var updates = {};
+  keys.forEach(function(k){ updates['leaves/' + k] = null; });
+  await fbUpdate('', updates);
+  toast('✅ 假單已刪除，統計已更新', 's');
+  renderLeaveReview();
+  if (document.getElementById('pg-month').classList.contains('active')) renderMonthTable();
+  if (document.getElementById('pg-overview').classList.contains('active')) renderOverview();
+}
+
+// ⭐ 區間假單:一次核准/駁回整組
+async function doReviewKeys(keys, action, inputKey) {
+  if (!keys || !keys.length) return;
+  var note = '';
+  if (action === 'rejected') {
+    note = (document.getElementById('rr-' + inputKey)||{}).value || '';
+    if (!note.trim()) { toast('⚠️ 請填寫駁回原因', 'd'); return; }
+  }
+  var who = currentUser ? currentUser.name : '';
+  var today = getTodayTW();
+  var updates = {};
+  keys.forEach(function(k){
+    updates['leaves/' + k + '/status'] = action;
+    updates['leaves/' + k + '/reviewBy'] = who;
+    updates['leaves/' + k + '/reviewNote'] = note;
+    updates['leaves/' + k + '/reviewAt'] = today;
+    updates['leaves/' + k + '/docFile'] = null;
+    updates['leaves/' + k + '/docName'] = null;
+  });
+  await fbUpdate('', updates);
+  renderLeaveReview();
+  updateLeaveBadge();
+  toast(action==='approved'?'✅ 已核准假單':'❌ 已駁回假單', action==='approved'?'s':'d');
 }
 
 async function doReview(key, action) {
@@ -10621,7 +10739,7 @@ initApp().then(() => {
       <div style="margin-top:11px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">優點</div><textarea id="mgr-kpi-strengths" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
       <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">缺點</div><textarea id="mgr-kpi-weaknesses" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
       <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">協助方式 & 人員進程規劃</div><textarea id="mgr-kpi-suggestions" rows="2" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea></div>
-      <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">本月外送津貼總額 (NT$)</div><input type="number" id="mgr-kpi-delivery" placeholder="0" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;box-sizing:border-box"></div>
+      <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">本月外送津貼總額 (NT$)</div><input type="number" id="mgr-kpi-delivery" placeholder="0" onchange="mgrSaveDeliveryBonus()" style="width:100%;padding:8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;box-sizing:border-box"><div style="font-size:11px;color:#16a34a;margin-top:3px">💾 填完跳出欄位即自動儲存，不必等 KPI 評分完成</div></div>
       <div style="margin-top:8px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">🌀 本月颱風假時數 (小時)</div><input type="number" id="mgr-kpi-typhoon" placeholder="0" step="0.5" min="0" style="width:100%;padding:8px;border:1.5px solid #F87171;border-radius:6px;font-size:13px;box-sizing:border-box;background:#FEF6F6"><div style="font-size:11px;color:#9CA3AF;margin-top:3px">無薪假(比照事假)。填此員工本月因颱風停班的時數，會自動帶入薪資表。</div></div>
       <button onclick="mgrSaveKpi()" style="width:100%;padding:12px;margin-top:13px;background:#BE6148;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer">儲存評分</button>
     </div>
